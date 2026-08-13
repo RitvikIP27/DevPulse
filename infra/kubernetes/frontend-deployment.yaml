@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devpulse-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: devpulse-frontend
+  template:
+    metadata:
+      labels:
+        app: devpulse-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: your-registry/devpulse-frontend:latest   # replace after `docker build`/push
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "200m", memory: "128Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devpulse-frontend
+spec:
+  selector:
+    app: devpulse-frontend
+  ports:
+    - port: 80
+      targetPort: 80
