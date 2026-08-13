@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: devpulse-db-secret
+type: Opaque
+stringData:
+  POSTGRES_USER: devpulse
+  POSTGRES_PASSWORD: devpulse   # replace with a real secret (or use Sealed Secrets / GCP Secret Manager) before real deployment
+  POSTGRES_DB: devpulse
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devpulse-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devpulse-postgres
+  template:
+    metadata:
+      labels:
+        app: devpulse-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          envFrom:
+            - secretRef:
+                name: devpulse-db-secret
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: devpulse-postgres-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: devpulse-postgres-pvc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devpulse-postgres
+spec:
+  selector:
+    app: devpulse-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

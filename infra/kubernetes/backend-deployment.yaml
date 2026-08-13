@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devpulse-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: devpulse-backend
+  template:
+    metadata:
+      labels:
+        app: devpulse-backend
+    spec:
+      containers:
+        - name: backend
+          image: your-registry/devpulse-backend:latest   # replace after `docker build`/push
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: postgresql://devpulse:devpulse@devpulse-postgres:5432/devpulse
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: devpulse-github-secret
+                  key: GITHUB_TOKEN
+            - name: GITHUB_REPOS
+              valueFrom:
+                configMapKeyRef:
+                  name: devpulse-config
+                  key: GITHUB_REPOS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devpulse-config
+data:
+  GITHUB_REPOS: "your-org/payments-service,your-org/auth-service,your-org/notifications-service"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: devpulse-github-secret
+type: Opaque
+stringData:
+  GITHUB_TOKEN: replace_with_real_token   # never commit a real token — use kubectl create secret instead
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devpulse-backend
+spec:
+  selector:
+    app: devpulse-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
