@@ -292,42 +292,47 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   5 — Real deployment model
+Stage:   8 + 9 — Historical baselines and the bottleneck engine
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  feat/stage-5-deployment-model
+Branch:  feat/stage-8-9-baselines-bottlenecks
 
 Summary:
-  THE CI PROXY IS GONE. DORA is computed from Deployment records, and all three
-  xfail defect locks are now ordinary passing tests.
+  Bottlenecks page is real. Deterministic, decomposable scoring over four
+  weighted signals, compared against the immediately preceding period.
 
 Implementation:
-  + migration 0003: deployments + deployment_rules tables
-  + services/deployments.py — two sources, never mixed (ADR-021):
-      github_deployments (authoritative) > configured_workflow (declared)
-      no source => metrics null + reason. NEVER falls back to counting CI runs.
-  + dora_metrics rewritten: all FIVE current DORA metrics, all nullable
-  + deployment rule CRUD API + Settings UI to declare the deploy workflow
-  + Overview/DORA rewritten; unmeasurable services excluded from aggregates
-    and sorted LAST (an unmeasurable service is not a healthy one)
+  + services/baselines.py — median / p90 / MAD, period comparison, regression
+    detection. Median NOT mean: real CI median is 4.2m with p90 609m.
+  + services/bottlenecks.py — 4 signals (ADR-022):
+      latency 0.40 / regression 0.25 / failure 0.20 / frequency 0.15
+      weights RENORMALISED when a signal is unavailable
+  + deliveries.build_traces() extracted for analytics reuse
+  + GET /api/bottlenecks
+  + Bottlenecks page: score hero, per-component breakdown bars, evidence list
 
-MEASURED EFFECT on RitvikIP27/KubernesDeployment (90d):
-  deployment frequency  2.64/wk -> 0.47/wk   (5.6x correction; audit predicted 5.7x)
-  change fail rate      21.3%   -> 53.8%     (CD workflow genuinely fails a lot)
-  lead time             0.0h    -> 5m        (merge -> deploy of that same commit)
-  recovery                 n/a  -> 37m
-  rework rate              n/a  -> 15.4%
-  rule "CD Workflow" matched 24 runs -> 6 success + 7 failed production deploys
+  Refuses to conclude rather than guessing:
+    <3 deliveries in window -> no bottleneck named, says why
+    <5 baseline samples -> regression reported unavailable with reason
+    <25% change -> normal variation, not a regression
+    improvements never raise a bottleneck score
 
-Tests:   backend 71 passed, 0 xfailed (was 66 + 3 xfail); frontend 24 passed
-Manual:  verified in browser. DevPulse repo (no rule) correctly shows "—"
-         everywhere with an explanation, not zeros.
+REAL RESULT on KubernesDeployment (90d):
+  PRIMARY: CI, score 88.7, HIGH impact, REGRESSION
+    median 3m -> 12m (+253.8%)
+    latency contribution 99.5% -> +39.8
+    historical regression          -> +25.0
+  With no baseline (120d window) weights renormalise to .533/.267/.2 and the
+  evidence says "No historical comparison: Only 0 historical sample(s)".
 
-PR:      #8
+Tests:   backend 97 passed, 0 xfailed; frontend 24 passed
+         includes the PRD section 5 validation scenario (review 312m vs CI 8m
+         -> review identified as primary bottleneck)
 
-Next:    Stage 8/9 — historical baselines + deterministic bottleneck engine.
-         Stage durations exist in delivery traces; Bottlenecks page is still a
-         placeholder. Or Stage 6 pipeline mapping UI expansion.
+PR:      #9
+
+Next:    Stage 10 anomaly engine, or Stage 13/14 runtime + incident connectors
+         (needed for Health, conflict detection and the evidence package).
 ```
 
 ---

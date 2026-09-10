@@ -30,7 +30,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Analyze",
     items: [
-      { path: "/bottlenecks", label: "Bottlenecks", icon: "⧗", hasData: false },
+      { path: "/bottlenecks", label: "Bottlenecks", icon: "⧗", hasData: true },
       { path: "/health", label: "Health", icon: "◎", hasData: false },
       { path: "/analysis", label: "Analysis", icon: "✦", hasData: false },
     ],

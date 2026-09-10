@@ -236,3 +236,47 @@ export async function deleteDeploymentRule(repositoryId: number, ruleId: number)
     throw new ApiError("Could not remove the deployment rule.", response.status);
   }
 }
+
+/* ------------------------------- Bottlenecks ----------------------------- */
+
+export interface ScoreComponent {
+  name: string;
+  value: number;
+  weight: number;
+  contribution: number;
+  explanation: string;
+}
+
+export interface StageBaseline {
+  sample_count: number;
+  median_minutes: number | null;
+  p90_minutes: number | null;
+}
+
+export interface StageAnalysis {
+  stage: PipelineStage;
+  score: number;
+  impact: "HIGH" | "MEDIUM" | "LOW";
+  current: StageBaseline;
+  baseline: StageBaseline;
+  change_pct: number | null;
+  is_regression: boolean;
+  latency_contribution_pct: number;
+  failure_rate_pct: number;
+  affected_deliveries: number;
+  total_deliveries: number;
+  components: ScoreComponent[];
+  evidence: string[];
+}
+
+export interface BottleneckResponse {
+  window_days: number;
+  deliveries_analysed: number;
+  primary_bottleneck: StageAnalysis | null;
+  stages: StageAnalysis[];
+  unavailable_reason: string | null;
+}
+
+export function fetchBottlenecks(windowDays = 30): Promise<BottleneckResponse> {
+  return request<BottleneckResponse>(`/bottlenecks?window_days=${windowDays}`);
+}

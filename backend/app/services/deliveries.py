@@ -214,6 +214,34 @@ def _runs_for(db: Session, repo_id: int, commit_sha: str) -> list[WorkflowRun]:
     )
 
 
+def build_traces(
+    db: Session, repository_id: int | None = None, since=None, until=None
+) -> list[tuple[PullRequest, list[DeliveryStage]]]:
+    """Delivery traces as (pull request, stages) pairs, for analytics.
+
+    Separated from list_deliveries because the analytics engines need the full
+    per-stage timings rather than the summary the API returns. Filtered on merge
+    time, since that is when the change actually landed.
+    """
+    query = (
+        db.query(PullRequest)
+        .filter(PullRequest.is_merged.is_(True))
+        .filter(PullRequest.merge_commit_sha.isnot(None))
+        .filter(PullRequest.merged_at.isnot(None))
+    )
+    if repository_id is not None:
+        query = query.filter(PullRequest.repository_id == repository_id)
+    if since is not None:
+        query = query.filter(PullRequest.merged_at >= since)
+    if until is not None:
+        query = query.filter(PullRequest.merged_at < until)
+
+    return [
+        (pr, _build_stages(pr, _runs_for(db, pr.repository_id, pr.merge_commit_sha)))
+        for pr in query.order_by(PullRequest.merged_at.asc()).all()
+    ]
+
+
 def list_deliveries(
     db: Session, repository_id: int | None = None, limit: int = DEFAULT_DELIVERY_LIMIT
 ) -> DeliveryListResponse:
