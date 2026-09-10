@@ -34,6 +34,27 @@ from app.models.events import PullRequest, Repository, WorkflowRun
 NOW = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
 
 
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch):
+    """Neutralise ambient configuration for every test.
+
+    Settings are loaded from backend/.env, so a developer with DEMO_MODE or a
+    PROMETHEUS_URL set would silently change what the suite asserts — and it did:
+    five provider-availability tests passed in CI and failed locally purely
+    because a local .env enabled demo mode.
+
+    A test that depends on the machine it runs on is not a test. Anything that
+    needs a provider switched on turns it on explicitly.
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "demo_mode", False, raising=False)
+    monkeypatch.setattr(settings, "prometheus_url", "", raising=False)
+    monkeypatch.setattr(settings, "pagerduty_token", "", raising=False)
+    monkeypatch.setattr(settings, "pagerduty_service_ids", "", raising=False)
+    monkeypatch.setattr(settings, "github_token", "test-token", raising=False)
+
+
 @pytest.fixture
 def db_session() -> Session:
     """A clean in-memory database per test.

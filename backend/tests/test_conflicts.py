@@ -22,13 +22,18 @@ from tests.conftest import NOW
 
 @pytest.fixture
 def monitoring_connected(monkeypatch):
-    """Pretend a Prometheus URL is configured, without making a network call."""
-    monkeypatch.setattr("app.connectors.prometheus.is_configured", lambda: True)
+    """Turn monitoring on explicitly, without making a network call."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "prometheus_url", "http://prometheus.test", raising=False)
 
 
 @pytest.fixture
 def incidents_connected(monkeypatch):
-    monkeypatch.setattr("app.connectors.pagerduty.is_configured", lambda: True)
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "pagerduty_token", "test-token", raising=False)
+    monkeypatch.setattr(settings, "pagerduty_service_ids", "PSERVICE1", raising=False)
 
 
 def _deployment(db, repository, *, status=DeploymentStatus.SUCCESS, minutes_ago=60):
