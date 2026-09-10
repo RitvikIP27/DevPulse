@@ -213,6 +213,37 @@ class Incident(Base):
     repository = relationship("Repository")
 
 
+class RcaAnalysis(Base):
+    """A stored AI analysis of one evidence package.
+
+    Persisted for reproducibility and cost control. ``evidence_hash`` is the
+    fingerprint of the deterministic evidence the analysis was produced from: if
+    the evidence has not changed, the stored analysis is reused rather than paid
+    for again, and an analysis can always be traced back to the exact facts that
+    produced it.
+    """
+
+    __tablename__ = "rca_analyses"
+    __table_args__ = (Index("ix_rca_analyses_evidence_hash", "evidence_hash"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    deployment_id = Column(Integer, ForeignKey("deployments.id"), nullable=True)
+
+    evidence_hash = Column(String, nullable=False)
+    provider = Column(String, nullable=False)      # e.g. "anthropic"
+    model = Column(String, nullable=False)
+    prompt_version = Column(String, nullable=False)
+
+    confidence = Column(String, nullable=False)    # HIGH / MEDIUM / LOW
+    result_json = Column(Text, nullable=False)
+    evidence_json = Column(Text, nullable=False)
+
+    created_at = Column(DateTime, nullable=False)
+
+    repository = relationship("Repository")
+
+
 class SyncJob(Base):
     """The outcome of one ingestion run.
 

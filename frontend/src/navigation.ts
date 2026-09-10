@@ -32,7 +32,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { path: "/bottlenecks", label: "Bottlenecks", icon: "⧗", hasData: true },
       { path: "/health", label: "Health", icon: "◎", hasData: true },
-      { path: "/analysis", label: "Analysis", icon: "✦", hasData: false },
+      { path: "/analysis", label: "Analysis", icon: "✦", hasData: true },
     ],
   },
   {

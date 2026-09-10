@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     #: clearly marked demo repositories only, and never mixed with real ones.
     demo_mode: bool = False
 
+    # --- AI reasoning (optional) ---
+    # Absent means analysis is unavailable, not that everything is fine: the
+    # deterministic evidence package is still produced and returned.
+    anthropic_api_key: str = ""
+    anthropic_model: str = ""
+
     @property
     def repo_list(self) -> list[str]:
         return [r.strip() for r in self.github_repos.split(",") if r.strip()]
