@@ -1,176 +1,229 @@
 # ⚡ DevPulse
 
-### Cloud-Native Engineering Intelligence & Delivery Analytics Platform
+### Engineering Intelligence & Software Delivery Observability
 
 [![CI](https://img.shields.io/badge/CI-GitHub_Actions-blue?logo=githubactions&logoColor=white)](https://github.com/RitvikIP27/DevPulse/actions)
 [![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Frontend](https://img.shields.io/badge/Frontend-React-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Frontend](https://img.shields.io/badge/Frontend-React_+_TypeScript-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Database](https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Containerized](https://img.shields.io/badge/Containerized-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Cloud](https://img.shields.io/badge/Cloud-Ready-FF9900?logo=amazonaws&logoColor=white)](#roadmap)
+[![Tests](https://img.shields.io/badge/tests-66_backend_%2F_23_frontend-4ade80)](#testing)
 
-> **DevPulse** is a cloud-native engineering intelligence platform that ingests GitHub engineering activity, computes DORA delivery metrics, and identifies potential delivery bottlenecks across repositories.
-
-Built as a **college minor project**, DevPulse is being developed from a working data-ingestion MVP toward a broader engineering intelligence platform covering delivery analytics, bottleneck detection, engineering health, and actionable recommendations.
-
----
-
-## 🧭 Current Status
-
-### MVP — Working
-
-- ✅ GitHub REST API integration
-- ✅ Repository synchronization
-- ✅ Pull request ingestion
-- ✅ GitHub Actions workflow ingestion
-- ✅ PostgreSQL persistence
-- ✅ DORA metrics engine
-- ✅ FastAPI REST API
-- ✅ React dashboard
-- ✅ Docker Compose local development stack
-- ✅ Frontend → FastAPI API proxy
-- ✅ Per-repository DORA metric calculation
-- ✅ CI workflow for project validation
-
-### 🚧 In Development
-
-- ⏳ Multi-page dashboard
-- ⏳ Repository management UI
-- ⏳ Historical metric trends
-- ⏳ Bottleneck detection
-- ⏳ Engineering health scoring
-- ⏳ Detailed repository analytics
-- ⏳ Recommendations and remediation guidance
-- ⏳ Authentication
-- ⏳ GitHub webhooks / real-time ingestion
+> DevPulse reconstructs the lifecycle of a software change across engineering
+> systems, measures delivery performance, and reports **exactly how much of the
+> story it can actually see.**
 
 ---
 
-## 📋 Engineering Audit
+## The idea
 
-A full Stage 0 audit of the running system — verified by executing the stack and
-ingesting live GitHub data, not by code reading alone — is published at
-[`docs/architecture-audit.md`](docs/architecture-audit.md).
+Every tool knows one fragment of a delivery. GitHub knows the pull request. CI
+knows the build. A deployment platform knows the release. Monitoring knows
+whether production stayed healthy afterwards. Nothing joins them.
 
-It records what works, quantifies the defects in the current metrics with evidence,
-and registers 25 findings by severity. Read it before making architectural changes.
-
-**Headline finding:** the four metrics above are computed from CI workflow runs standing
-in for deployments. On the audited repository only 6 of 34 counted "deployments" were
-deployment-shaped, and measured lead time collapsed to ~0.1 minutes for every pull
-request. The MVP ingestion, persistence, API and dashboard are sound; the delivery
-*semantics* are what need to evolve.
-
-### Target architecture
-
-DevPulse is evolving from `GitHub → DORA dashboard` toward a layered delivery
-intelligence system, where a deterministic pipeline establishes facts and AI reasons
-only over structured evidence:
+DevPulse joins them on **commit identity**, and is explicit about what it cannot
+observe:
 
 ```text
-CONNECTORS → NORMALIZED EVENTS → CORRELATION → DELIVERY TRACES
-     → DORA / BOTTLENECKS / ANOMALIES → HISTORICAL BASELINES
-     → EVIDENCE → AI REASONING → RCA + RECOMMENDATIONS
+Connectors → Normalization → Correlation → Delivery Traces
+          → Metrics / Baselines / Bottlenecks
+          → Evidence → (later) AI reasoning
 ```
 
-The guiding constraint: **connectors collect facts, normalization unifies them,
-correlation reconstructs deliveries, analytics measures, and AI interprets.** Those
-responsibilities are never collapsed, and AI is never the source of truth.
+The deterministic layer establishes the facts. AI is deferred until there is
+trustworthy evidence for it to reason over — see [ADR-008](Decision.md).
 
 ---
 
-# 🎯 Problem
+## What actually works today
 
-Modern engineering teams generate large amounts of delivery data across:
+| Capability | Status |
+|---|---|
+| GitHub + Actions ingestion, with pagination, retries and rate-limit handling | ✅ |
+| Sync outcomes persisted and classified (`SUCCESS` / `PARTIAL` / `FAILED`) | ✅ |
+| Commit-SHA correlation keys on every record | ✅ |
+| **Delivery traces** — a change reconstructed across 10 pipeline stages | ✅ |
+| Per-stage **data coverage** and analysis confidence | ✅ |
+| DORA-style indicators | ⚠️ CI-proxy derived — see below |
+| Nine-page dashboard, dark design system, responsive | ✅ |
+| Bottleneck engine, health scoring, RCA | ⛔ Not built — pages say so |
 
-- Pull requests
-- Code changes
-- CI/CD pipelines
-- Deployments
-- Failures
-- Recovery events
+### The delivery trace
 
-Raw activity does not automatically explain **where delivery is slowing down**.
-
-DevPulse aims to turn this engineering activity into a single intelligence layer that answers:
-
-> **Where is our delivery pipeline slowing down, why is it happening, and what should we improve?**
-
----
-
-# 🧠 Core Capabilities
-
-## Delivery Metrics (MVP — CI-proxy derived)
-
-DevPulse currently computes four DORA-style delivery indicators. **These are derived
-from GitHub Actions workflow runs used as a proxy for deployments, not from real
-production deployment data.** They are directionally useful for comparing repositories
-but are not yet valid DORA measurements.
-
-| Indicator | How it is computed today | Known limitation |
-|---|---|---|
-| 🚀 Deployment Frequency | Successful workflow runs per week | Counts CI and infrastructure runs as deployments |
-| ⏱️ Lead Time for Changes | PR merge → next successful workflow run | Collapses toward zero, because CI triggers seconds after merge |
-| ⚠️ Change Failure Rate | Failed runs ÷ total runs | Measures all workflow failures, not production change failures |
-| 🔧 Mean Time to Recovery | Failed run → next successful run | The next success is often an unrelated concurrent workflow |
-
-Metrics can be calculated over configurable look-back windows.
-
-> **Measurement caveat.** Until DevPulse ingests real deployment events, these numbers
-> should be read as CI pipeline statistics. The quantified impact of each limitation is
-> documented with evidence in [`docs/architecture-audit.md`](docs/architecture-audit.md).
-> Replacing this proxy with an explicit deployment model — and reporting
-> *"deployment data unavailable"* instead of a misleading number — is tracked as Stage 5
-> of the roadmap.
-
-Current DORA defines **five** metrics; DevPulse implements four of the legacy set today.
-Deployment Rework Rate, and the reframing of MTTR as Failed Deployment Recovery Time,
-arrive with the Stage 7 metrics engine.
-
----
-
-# 🏗️ Architecture (current state)
+The core object. A merged pull request is correlated to every workflow run
+reporting the same merge commit:
 
 ```text
-                       ┌──────────────────────┐
-                       │       GitHub         │
-                       │                      │
-                       │ PRs + Actions Runs   │
-                       └──────────┬───────────┘
-                                  │
-                                  │ REST API
-                                  ▼
-                       ┌──────────────────────┐
-                       │   FastAPI Backend    │
-                       │                      │
-                       │ GitHub Ingestion     │
-                       │ REST API             │
-                       └──────────┬───────────┘
-                                  │
-                                  ▼
-                       ┌──────────────────────┐
-                       │     PostgreSQL       │
-                       │                      │
-                       │ Repositories         │
-                       │ Pull Requests        │
-                       │ Workflow Runs        │
-                       └──────────┬───────────┘
-                                  │
-                                  ▼
-                       ┌──────────────────────┐
-                       │   DORA Engine        │
-                       │                      │
-                       │ Frequency            │
-                       │ Lead Time            │
-                       │ Failure Rate         │
-                       │ MTTR                 │
-                       └──────────┬───────────┘
-                                  │
-                                  │ REST API
-                                  ▼
-                       ┌──────────────────────┐
-                       │    React Dashboard   │
-                       │                      │
-                       │ Metrics + Analytics  │
-                       └──────────────────────┘
+Delivery · PR #27                                          commit 13be8d5bc3
+
+  SOURCE      ● Success        Commit 13be8d5bc3 on main
+  REVIEW      ● Success        Open for review                          5m
+  CI          ● Failed         10 workflow runs reported this commit  12.9h
+  QUALITY     ○ Not observed   No code-quality integration connected
+  BUILD       ○ Not observed   Build events not distinguished from CI
+  ARTIFACT    ○ Not observed   No artifact registry connected
+  DEPLOYMENT  ○ Not observed   No deployment provider connected
+  ROLLOUT     ○ Not observed   No orchestrator connected
+  RUNTIME     ○ Not observed   No monitoring provider connected
+  INCIDENT    ○ Not observed   No incident provider connected
+
+  3 of 10 stages observed
 ```
+
+**Correlation is on commit identity, never on timing.** A run firing seconds
+after a merge but carrying a different commit is left unlinked. `NOT_OBSERVED`
+is a distinct status from `FAILED` — a delivery is not failed merely because
+runtime telemetry is missing.
+
+---
+
+## Honesty about the metrics
+
+This is the part most delivery dashboards get wrong, so DevPulse states it
+plainly in the product, not just the docs.
+
+No deployment provider is connected yet, so the current DORA-style numbers are
+derived from **CI workflow runs standing in for deployments.** A [Stage 0
+audit](docs/architecture-audit.md) measured the damage on a real repository:
+
+- Only **6 of 34** counted "deployments" were deployment-shaped — frequency
+  overstated roughly **5.7×**
+- Lead time collapsed to **~0.1 minutes for every pull request**, because the
+  matched run was the CI job the merge itself triggered
+
+Both defects are locked in `xfail(strict=True)` tests that will **fail the build
+the moment they are fixed**, forcing the marker to be removed
+([ADR-016](Decision.md)).
+
+Three display states are kept strictly apart throughout the UI:
+
+```text
+empty          the query ran and found nothing
+unavailable    the metric cannot be computed from the data present
+not observed   no integration reports this at all
+```
+
+A window with no completed runs renders `—`, never `0.0%`. A zero failure rate
+reads as a healthy service, and in the audit an empty repository sorted as the
+best performer.
+
+---
+
+## Quickstart
+
+```bash
+git clone https://github.com/RitvikIP27/DevPulse.git
+cd DevPulse
+cp backend/.env.example backend/.env    # add GITHUB_TOKEN and GITHUB_REPOS
+docker compose up --build
+```
+
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost:5173 |
+| API docs | http://localhost:8000/docs |
+| Postgres | `localhost:55432` |
+
+Then open **Repositories → Sync from GitHub**, and watch the sync result appear
+in the *Last sync* column.
+
+> The database is published on `55432`, not `5432`, because developer machines
+> very often already run a local Postgres — which made the old quickstart fail
+> outright.
+
+### Configuration
+
+```bash
+GITHUB_TOKEN=<a personal access token with repo scope>
+GITHUB_REPOS=owner/repo,owner/another-repo
+DATABASE_URL=postgresql://devpulse:devpulse@db:5432/devpulse
+```
+
+Secrets are read from the environment and never rendered in the UI.
+
+---
+
+## API
+
+```text
+GET  /health
+GET  /api/repositories              tracked repos + per-stage data coverage
+GET  /api/deliveries                delivery traces
+GET  /api/deliveries/{id}           one trace, with correlation evidence
+GET  /api/metrics/dora              delivery indicators (CI-proxy derived)
+POST /api/ingest/sync               202 Accepted — runs in the background
+GET  /api/ingest/jobs               what each sync actually did
+```
+
+---
+
+## Testing
+
+```bash
+cd backend && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest          # 66 passed, 3 xfailed
+
+cd frontend && npm ci && npm test   # 23 passed
+```
+
+CI runs both suites, applies and reverses migrations against real PostgreSQL,
+and **fails the build if a model has drifted from its migration.**
+
+Connector tests use `respx` and touch no network.
+
+---
+
+## Architecture
+
+```text
+backend/
+├── alembic/            migrations — the single owner of schema (ADR-015)
+├── app/
+│   ├── api/            thin routes
+│   ├── core/           config, database, logging
+│   ├── models/         SQLAlchemy entities
+│   ├── schemas/        Pydantic API contracts
+│   └── services/       ingestion, correlation, delivery traces, metrics
+└── tests/
+
+frontend/src/
+├── components/         layout shell + reusable UI
+├── pages/              nine pages
+├── state/              filter context, async state
+└── api/                single typed API client
+```
+
+Schema is owned by Alembic and applied by the container entrypoint before the
+server starts. `create_all` is never used.
+
+---
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [PRD.md](PRD.md) | Product requirements and roadmap |
+| [architecture.md](architecture.md) | Technical architecture |
+| [Decision.md](Decision.md) | Architecture decision records (ADR-001 → 020) |
+| [Design.md](Design.md) | Design system |
+| [testing.md](testing.md) | Testing strategy |
+| [rules.md](rules.md) | Engineering rules |
+| [AGENTS.md](AGENTS.md) | Coding-agent handbook |
+| [memory.md](memory.md) | Running project context |
+| [docs/architecture-audit.md](docs/architecture-audit.md) | Stage 0 audit — 25 findings with evidence |
+
+---
+
+## Roadmap
+
+Delivered: repository audit · migration and test foundation · product shell ·
+correlation keys and sync observability · delivery traces.
+
+Next: explicit deployment model (retiring the CI proxy) · historical baselines ·
+deterministic bottleneck engine · anomaly detection · runtime and incident
+connectors · cross-system conflict detection · evidence package · AI RCA.
+
+---
+
+## Licence
+
+[MIT](LICENSE)
