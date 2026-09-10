@@ -735,3 +735,61 @@ PRD constraint 9 requires every score to be explainable from its inputs. A
 number no one can take apart is not evidence, and a bottleneck engine that
 cannot justify itself will simply not be believed by the engineers it is
 advising.
+
+---
+
+# ADR-023 — Conflicts Are Reported as Correlations, Never as Causes
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 12/13/14
+
+## Context
+
+A deployment platform reporting SUCCESS is describing its own control plane. It
+knows the rollout mechanism completed; it knows nothing about whether the
+application it shipped still works. When monitoring disagrees, reporting
+"healthy" is worse than reporting nothing.
+
+## Decision
+
+DevPulse compares runtime metrics in a window before each deployment against the
+same window after, and raises a conflict when the control plane and runtime
+disagree. Every conflict carries three things: what each system reported, the
+evidence, and an explicit list of what remains **undetermined**.
+
+The strength vocabulary is deliberately closed:
+
+```text
+CORRELATED             the two were observed together
+POTENTIALLY_RELATED    the two occurred near each other
+```
+
+There is no `CAUSED`. Temporal proximity is evidence, not proof (ADR-011,
+rules.md 10), and omitting the vocabulary is the only reliable way to stop a
+caller promoting a correlation into a causal claim. A test asserts the word
+"caused" never appears in generated evidence except inside an *unknown*.
+
+## Guards against false positives
+
+- Fewer than 3 samples on either side yields no verdict.
+- A relative worsening below 50% is noise.
+- Improvements are never degradations; direction is interpreted per metric,
+  since higher is worse for error rate but better for availability.
+- An incident more than 60 minutes after a deployment is not associated with it.
+- A deployment with nothing to report is omitted, so the page shows signal.
+
+## Providers are optional and their absence is stated
+
+Prometheus and PagerDuty are configured, never defaulted. Silently querying the
+wrong endpoint is worse than reporting that runtime data is unavailable. With
+neither connected, the response says plainly that DevPulse can confirm a
+deployment reported success but cannot determine whether production stayed
+healthy.
+
+## Demonstrability
+
+Because most repositories have no monitoring, the synthetic reference scenarios
+from PRD 5 are seeded by `python -m app.demo_seed` into a clearly marked demo
+repository, with every record carrying a `demo` provider. Demo data is never
+written to a real repository, and `DEMO_MODE` gates whether it is readable.

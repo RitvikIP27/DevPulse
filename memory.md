@@ -292,47 +292,45 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   8 + 9 — Historical baselines and the bottleneck engine
+Stage:   12 + 13 + 14 — Runtime, incidents, and cross-system conflict detection
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  feat/stage-8-9-baselines-bottlenecks
+Branch:  feat/stage-12-14-runtime-incidents-conflicts
 
 Summary:
-  Bottlenecks page is real. Deterministic, decomposable scoring over four
-  weighted signals, compared against the immediately preceding period.
+  THE DIFFERENTIATOR WORKS. DevPulse detects that a deployment reported SUCCESS
+  while the application it shipped degraded — and refuses to call it a cause.
 
 Implementation:
-  + services/baselines.py — median / p90 / MAD, period comparison, regression
-    detection. Median NOT mean: real CI median is 4.2m with p90 609m.
-  + services/bottlenecks.py — 4 signals (ADR-022):
-      latency 0.40 / regression 0.25 / failure 0.20 / frequency 0.15
-      weights RENORMALISED when a signal is unavailable
-  + deliveries.build_traces() extracted for analytics reuse
-  + GET /api/bottlenecks
-  + Bottlenecks page: score hero, per-component breakdown bars, evidence list
+  + migration 0004: runtime_observations + incidents
+  + connectors/prometheus.py (query_range, NaN = absence not zero)
+  + connectors/pagerduty.py (incidents by configured service id)
+  + services/conflicts.py — before/after comparison + conflict detection
+  + services/providers.py — one place answering "can we read runtime/incidents"
+  + GET /api/conflicts ; Health page is now real
+  + app/demo_seed.py — PRD 5 synthetic scenarios in a MARKED demo repo
 
-  Refuses to conclude rather than guessing:
-    <3 deliveries in window -> no bottleneck named, says why
-    <5 baseline samples -> regression reported unavailable with reason
-    <25% change -> normal variation, not a regression
-    improvements never raise a bottleneck score
+  ADR-023: strength vocabulary is CORRELATED / POTENTIALLY_RELATED only.
+  There is NO "CAUSED". A test asserts "caused" never appears in evidence
+  except inside an explicit unknown.
 
-REAL RESULT on KubernesDeployment (90d):
-  PRIMARY: CI, score 88.7, HIGH impact, REGRESSION
-    median 3m -> 12m (+253.8%)
-    latency contribution 99.5% -> +39.8
-    historical regression          -> +25.0
-  With no baseline (120d window) weights renormalise to .533/.267/.2 and the
-  evidence says "No historical comparison: Only 0 historical sample(s)".
+  False-positive guards: <3 samples/side = no verdict; <50% worsening = noise;
+  improvements are never degradations (direction is per-metric); incidents >60m
+  after a deploy are not associated.
 
-Tests:   backend 97 passed, 0 xfailed; frontend 24 passed
-         includes the PRD section 5 validation scenario (review 312m vs CI 8m
-         -> review identified as primary bottleneck)
+VERIFIED on the seeded scenarios:
+  degraded deploy: error_rate 0.8 -> 18.4 (+2200%), latency 180 -> 910 (+405.6%)
+                   status SUCCESS + CONFLICT(CORRELATED) + 1 incident
+  healthy deploy:  0.8 -> 0.8, NO conflict (no false positive)
+  with no providers: "cannot determine whether production stayed healthy"
 
-PR:      #9
+Tests:   backend 111 passed, 0 xfailed; frontend 24 passed
 
-Next:    Stage 10 anomaly engine, or Stage 13/14 runtime + incident connectors
-         (needed for Health, conflict detection and the evidence package).
+PR:      #10
+
+Next:    Stage 10 anomaly engine, or Stage 15/16 evidence package + AI RCA.
+         AI is now unblocked: deterministic evidence (traces, baselines,
+         bottlenecks, conflicts, coverage) all exist for it to reason over.
 ```
 
 ---

@@ -8,7 +8,8 @@ ingested, not declared by hand.
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.events import PullRequest, Repository, WorkflowRun
+from app.services import providers
+from app.models.events import Deployment, Incident, PullRequest, Repository, RuntimeObservation, WorkflowRun
 from app.schemas.repositories import (
     AnalysisConfidence,
     CoverageStatus,
@@ -21,8 +22,10 @@ from app.schemas.repositories import (
 )
 from app.services.sync_jobs import latest_job_for_repository
 
-# Stages that a GitHub + GitHub Actions integration can populate today.
-# Everything else has no connector, so it is NOT_CONFIGURED rather than empty.
+# Stages a GitHub + GitHub Actions integration always populates. Deployment,
+# runtime and incident coverage depend on configuration and are resolved per
+# repository, because "not configured" and "configured but empty" are different
+# facts and must not be collapsed.
 _CONNECTED_STAGES = {PipelineStage.SOURCE, PipelineStage.CI}
 
 # Delivery analysis is only as trustworthy as the stages that bound it: where a
@@ -51,7 +54,26 @@ _NOT_CONFIGURED_DETAIL = {
 }
 
 
-def _stage_coverage(pull_request_count: int, workflow_run_count: int) -> list[StageCoverage]:
+def _configured_stage_coverage(
+    stage: PipelineStage, configured: bool, count: int, connected_detail: str, missing_detail: str
+) -> StageCoverage:
+    if not configured:
+        return StageCoverage(stage=stage, status=CoverageStatus.NOT_CONFIGURED, detail=missing_detail)
+    return StageCoverage(
+        stage=stage,
+        status=CoverageStatus.AVAILABLE if count else CoverageStatus.NO_DATA,
+        detail=connected_detail if count else "Provider connected, but nothing ingested yet.",
+        record_count=count,
+    )
+
+
+def _stage_coverage(
+    pull_request_count: int,
+    workflow_run_count: int,
+    deployment_count: int = 0,
+    runtime_count: int = 0,
+    incident_count: int = 0,
+) -> list[StageCoverage]:
     counts = {
         PipelineStage.SOURCE: pull_request_count,
         PipelineStage.CI: workflow_run_count,
@@ -61,9 +83,29 @@ def _stage_coverage(pull_request_count: int, workflow_run_count: int) -> list[St
         PipelineStage.CI: "Workflow runs ingested from GitHub Actions.",
     }
 
+    resolved = {
+        PipelineStage.DEPLOYMENT: _configured_stage_coverage(
+            PipelineStage.DEPLOYMENT, deployment_count > 0, deployment_count,
+            "Production deployments identified.",
+            _NOT_CONFIGURED_DETAIL[PipelineStage.DEPLOYMENT],
+        ),
+        PipelineStage.RUNTIME: _configured_stage_coverage(
+            PipelineStage.RUNTIME, providers.runtime_available(), runtime_count,
+            "Runtime samples ingested from Prometheus.",
+            _NOT_CONFIGURED_DETAIL[PipelineStage.RUNTIME],
+        ),
+        PipelineStage.INCIDENT: _configured_stage_coverage(
+            PipelineStage.INCIDENT, providers.incidents_available(), incident_count,
+            "Incidents ingested from PagerDuty.",
+            _NOT_CONFIGURED_DETAIL[PipelineStage.INCIDENT],
+        ),
+    }
+
     coverage: list[StageCoverage] = []
     for stage in PipelineStage:
-        if stage in _CONNECTED_STAGES:
+        if stage in resolved:
+            coverage.append(resolved[stage])
+        elif stage in _CONNECTED_STAGES:
             count = counts[stage]
             coverage.append(
                 StageCoverage(
@@ -157,7 +199,23 @@ def list_repositories(db: Session) -> RepositoryListResponse:
             else None
         )
 
-        stages = _stage_coverage(pull_request_count, workflow_run_count)
+        deployment_count = (
+            db.query(func.count(Deployment.id))
+            .filter(Deployment.repository_id == repository.id).scalar() or 0
+        )
+        runtime_count = (
+            db.query(func.count(RuntimeObservation.id))
+            .filter(RuntimeObservation.repository_id == repository.id).scalar() or 0
+        )
+        incident_count = (
+            db.query(func.count(Incident.id))
+            .filter(Incident.repository_id == repository.id).scalar() or 0
+        )
+
+        stages = _stage_coverage(
+            pull_request_count, workflow_run_count,
+            deployment_count, runtime_count, incident_count,
+        )
         confidence, confidence_reason = _confidence(stages)
 
         summaries.append(
