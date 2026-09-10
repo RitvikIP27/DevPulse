@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging import get_logger
 from app.models.events import PullRequest, Repository, SyncJob, WorkflowRun
+from app.services.deployments import derive_deployments_from_rules, sync_github_deployments
 from app.services.errors import ConnectorError, ErrorCode, classify_http_error
 from app.services.timestamps import parse_utc, utc_now
 
@@ -248,6 +249,16 @@ def sync_repository(db: Session, full_name: str, client: httpx.Client) -> SyncJo
     try:
         job.pull_requests_written = sync_pull_requests(db, repo, client)
         job.workflow_runs_written = sync_workflow_runs(db, repo, client)
+
+        # Deployments come from the provider where it has them; otherwise from
+        # rules the user declared. Never inferred from CI runs (ADR-010).
+        provider_deployments = sync_github_deployments(db, repo, client)
+        derived = derive_deployments_from_rules(db, repo) if not provider_deployments else 0
+        logger.info(
+            "deployments resolved repository=%s provider=%d configured=%d",
+            full_name, provider_deployments, derived,
+        )
+
         job.status = SyncStatus.SUCCESS
         logger.info(
             "sync succeeded repository=%s pull_requests=%d workflow_runs=%d",

@@ -26,12 +26,17 @@ async function request<T>(path: string): Promise<T> {
 
 /* ---------------------------------- DORA --------------------------------- */
 
+export type DeploymentSource = "GITHUB_DEPLOYMENTS" | "CONFIGURED_WORKFLOW" | "NONE";
+
 export interface ServiceDoraMetrics {
   service: string;
-  deployment_frequency_per_week: number;
+  deployment_source: DeploymentSource;
+  unavailable_reason: string | null;
+  deployment_frequency_per_week: number | null;
   lead_time_hours: number | null;
-  change_failure_rate_pct: number;
-  mttr_hours: number | null;
+  change_failure_rate_pct: number | null;
+  failed_deployment_recovery_hours: number | null;
+  deployment_rework_rate_pct: number | null;
   total_deployments: number;
   total_failures: number;
 }
@@ -176,4 +181,58 @@ export function fetchDeliveries(limit = 25): Promise<{
 
 export function fetchDelivery(id: string): Promise<DeliveryDetail> {
   return request<DeliveryDetail>(`/deliveries/${id}`);
+}
+
+/* ---------------------------- Deployment rules --------------------------- */
+
+export interface DeploymentRule {
+  id: number;
+  repository_id: number;
+  workflow_name_pattern: string;
+  environment: string;
+  is_production: boolean;
+  matched_run_count: number;
+}
+
+export interface DeploymentRuleList {
+  rules: DeploymentRule[];
+  deployment_source: DeploymentSource;
+}
+
+export function fetchDeploymentRules(repositoryId: number): Promise<DeploymentRuleList> {
+  return request<DeploymentRuleList>(`/repositories/${repositoryId}/deployment-rules`);
+}
+
+export async function createDeploymentRule(
+  repositoryId: number,
+  workflowNamePattern: string,
+  environment = "production"
+): Promise<DeploymentRuleList> {
+  const response = await fetch(`${BASE}/repositories/${repositoryId}/deployment-rules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workflow_name_pattern: workflowNamePattern,
+      environment,
+      is_production: true,
+    }),
+  });
+  if (!response.ok) {
+    throw new ApiError(
+      response.status === 409
+        ? "That rule already exists."
+        : "Could not create the deployment rule.",
+      response.status
+    );
+  }
+  return response.json() as Promise<DeploymentRuleList>;
+}
+
+export async function deleteDeploymentRule(repositoryId: number, ruleId: number): Promise<void> {
+  const response = await fetch(`${BASE}/repositories/${repositoryId}/deployment-rules/${ruleId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new ApiError("Could not remove the deployment rule.", response.status);
+  }
 }

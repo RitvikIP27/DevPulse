@@ -21,6 +21,7 @@ from app.services.github_client import (
 
 PULLS_URL = f"{GITHUB_API}/repos/devpulse-test/payments-api/pulls"
 RUNS_URL = f"{GITHUB_API}/repos/devpulse-test/payments-api/actions/runs"
+DEPLOYMENTS_URL = f"{GITHUB_API}/repos/devpulse-test/payments-api/deployments"
 
 PR_PAYLOAD = {
     "number": 482,
@@ -180,6 +181,7 @@ def test_pagination_stops_when_the_rate_limit_reserve_is_reached(db_session, rep
 @respx.mock
 def test_an_authentication_failure_is_recorded_instead_of_disappearing(db_session, repository):
     """Audit finding 4. This exact scenario previously produced no trace at all."""
+    respx.get(DEPLOYMENTS_URL).mock(return_value=httpx.Response(200, json=[]))
     respx.get(PULLS_URL).mock(return_value=httpx.Response(401, json={"message": "Bad credentials"}))
 
     with httpx.Client() as http_client:
@@ -195,6 +197,7 @@ def test_an_authentication_failure_is_recorded_instead_of_disappearing(db_sessio
 @respx.mock
 def test_a_failure_after_partial_progress_is_partial_not_failed(db_session, repository):
     """The distinction decides whether a metric's data can be trusted."""
+    respx.get(DEPLOYMENTS_URL).mock(return_value=httpx.Response(200, json=[]))
     respx.get(PULLS_URL).mock(return_value=httpx.Response(200, json=[PR_PAYLOAD]))
     respx.get(RUNS_URL).mock(return_value=httpx.Response(500, json={"message": "boom"}))
 
@@ -208,6 +211,9 @@ def test_a_failure_after_partial_progress_is_partial_not_failed(db_session, repo
 
 @respx.mock
 def test_a_successful_sync_records_what_it_wrote(db_session, repository):
+    # Most repositories have no GitHub Deployments; an empty list is the normal
+    # response, and the sync must still succeed.
+    respx.get(DEPLOYMENTS_URL).mock(return_value=httpx.Response(200, json=[]))
     respx.get(PULLS_URL).mock(return_value=httpx.Response(200, json=[PR_PAYLOAD]))
     respx.get(RUNS_URL).mock(return_value=httpx.Response(200, json={"workflow_runs": [RUN_PAYLOAD]}))
 
