@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Boolean,
+    Float,
     Column,
     DateTime,
     ForeignKey,
@@ -159,6 +160,54 @@ class Deployment(Base):
     status = Column(String, nullable=False)  # SUCCESS / FAILED / IN_PROGRESS
     started_at = Column(DateTime, nullable=False)
     finished_at = Column(DateTime, nullable=True)
+    url = Column(String, nullable=True)
+
+    repository = relationship("Repository")
+
+
+class RuntimeObservation(Base):
+    """A runtime health measurement for a service at a point in time.
+
+    Stored as a time series so a deployment can be compared against the window
+    before it and the window after it. Without this, DevPulse can report that a
+    deployment succeeded but never whether production stayed healthy.
+    """
+
+    __tablename__ = "runtime_observations"
+    __table_args__ = (Index("ix_runtime_observations_repo_time", "repository_id", "observed_at"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    provider = Column(String, nullable=False)  # e.g. "prometheus"
+    environment = Column(String, nullable=False, default="production")
+
+    #: error_rate_pct, latency_p95_ms, availability_pct, restart_count ...
+    metric = Column(String, nullable=False)
+    value = Column(Float, nullable=False)
+    observed_at = Column(DateTime, nullable=False)
+
+    repository = relationship("Repository")
+
+
+class Incident(Base):
+    """An operational incident, from an incident-management provider."""
+
+    __tablename__ = "incidents"
+    __table_args__ = (
+        UniqueConstraint("repository_id", "provider", "external_id", name="uq_incident_external"),
+        Index("ix_incidents_started_at", "started_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    provider = Column(String, nullable=False)  # e.g. "pagerduty"
+    external_id = Column(String, nullable=False)
+
+    title = Column(String, nullable=True)
+    severity = Column(String, nullable=True)
+    status = Column(String, nullable=False)  # TRIGGERED / ACKNOWLEDGED / RESOLVED
+    started_at = Column(DateTime, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
     url = Column(String, nullable=True)
 
     repository = relationship("Repository")

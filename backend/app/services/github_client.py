@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging import get_logger
 from app.models.events import PullRequest, Repository, SyncJob, WorkflowRun
+from app.connectors import pagerduty, prometheus
 from app.services.deployments import derive_deployments_from_rules, sync_github_deployments
 from app.services.errors import ConnectorError, ErrorCode, classify_http_error
 from app.services.timestamps import parse_utc, utc_now
@@ -258,6 +259,14 @@ def sync_repository(db: Session, full_name: str, client: httpx.Client) -> SyncJo
             "deployments resolved repository=%s provider=%d configured=%d",
             full_name, provider_deployments, derived,
         )
+
+        # Runtime and incident providers are optional. A provider that is not
+        # configured contributes nothing and is not an error; coverage reports
+        # the absence rather than the sync failing.
+        if prometheus.is_configured():
+            prometheus.sync_runtime_observations(db, repo)
+        if pagerduty.is_configured():
+            pagerduty.sync_incidents(db, repo)
 
         job.status = SyncStatus.SUCCESS
         logger.info(

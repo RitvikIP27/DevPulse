@@ -280,3 +280,55 @@ export interface BottleneckResponse {
 export function fetchBottlenecks(windowDays = 30): Promise<BottleneckResponse> {
   return request<BottleneckResponse>(`/bottlenecks?window_days=${windowDays}`);
 }
+
+/* -------------------------------- Conflicts ------------------------------ */
+
+export interface MetricShift {
+  metric: string;
+  before_value: number | null;
+  after_value: number | null;
+  change_pct: number | null;
+  sample_count_before: number;
+  sample_count_after: number;
+  is_degradation: boolean;
+}
+
+export interface RuntimeComparison {
+  available: boolean;
+  unavailable_reason: string | null;
+  window_minutes: number;
+  shifts: MetricShift[];
+}
+
+export interface Conflict {
+  type: string;
+  strength: "CORRELATED" | "POTENTIALLY_RELATED";
+  title: string;
+  description: string;
+  evidence: string[];
+  unknowns: string[];
+}
+
+export interface DeploymentConflictReport {
+  deployment_id: number;
+  repository_full_name: string;
+  environment: string;
+  commit_sha: string | null;
+  deployment_status: string;
+  deployed_at: string;
+  runtime: RuntimeComparison;
+  incidents_after: number;
+  conflicts: Conflict[];
+}
+
+export interface ConflictListResponse {
+  reports: DeploymentConflictReport[];
+  conflict_count: number;
+  runtime_available: boolean;
+  incidents_available: boolean;
+  unavailable_reason: string | null;
+}
+
+export function fetchConflicts(windowDays = 30): Promise<ConflictListResponse> {
+  return request<ConflictListResponse>(`/conflicts?window_days=${windowDays}`);
+}
