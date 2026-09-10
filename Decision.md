@@ -672,3 +672,66 @@ mapping the user has withdrawn.
 
 All three `xfail(strict=True)` defect locks from ADR-016 are now ordinary
 passing tests, and their markers have been removed as that ADR requires.
+
+---
+
+# ADR-022 — Bottleneck Scoring Is Weighted, Renormalised and Decomposable
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 8/9
+
+## Context
+
+The obvious bottleneck rule is "the slowest stage wins". It is wrong. A stage
+that has always taken twenty minutes is a cost, not a constraint. The stage that
+used to take five minutes and now takes forty is where delivery is being lost,
+even though it is not the slowest.
+
+## Decision
+
+Four independent signals, weighted:
+
+```text
+latency contribution   0.40   share of total measured delivery time
+historical regression  0.25   change against the immediately preceding period
+failure impact         0.20   share of observations of this stage that failed
+frequency              0.15   share of deliveries passing through the stage
+```
+
+The score is the weighted sum, on 0-100. Every component is returned with its
+value, weight, contribution and a sentence explaining it, and the UI renders the
+breakdown alongside the score.
+
+**Weights are renormalised over available signals.** When no baseline exists the
+regression component is dropped and the remaining weights are rescaled to sum to
+1.0. Scoring a missing baseline as zero would penalise a genuinely constrained
+stage for the accident of having no history.
+
+## Statistical choices
+
+Median and median absolute deviation, not mean and standard deviation. Delivery
+data is heavily skewed: on the audited repository CI has a median of 4.2 minutes
+and a p90 of 609 minutes. A mean would describe neither.
+
+The baseline is the equally long period immediately preceding the window, so
+like is compared with like rather than against all of history.
+
+## Refusals
+
+The engine declines to conclude rather than guessing:
+
+- Fewer than 3 deliveries in the window: no bottleneck is named, and the
+  response says how many were found and why that is too few.
+- Fewer than 5 baseline samples: the regression signal is reported as
+  unavailable with the reason. "Not enough history" and "no regression" are
+  different claims and must not be collapsed.
+- A change below 25% is normal variation, not a regression.
+- An improvement never contributes to a bottleneck score.
+
+## Why decomposable
+
+PRD constraint 9 requires every score to be explainable from its inputs. A
+number no one can take apart is not evidence, and a bottleneck engine that
+cannot justify itself will simply not be believed by the engineers it is
+advising.
