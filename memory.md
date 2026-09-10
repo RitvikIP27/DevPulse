@@ -292,41 +292,36 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   0.5 — Foundation (migrations, tests, honesty fixes)
+Stage:   1 — Product Shell
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  chore/stage-0-5-foundation
+Branch:  feat/stage-1-product-shell
 
 Summary:
-  Put the two things every later stage lands on in place: Alembic owns the
-  schema, and a pytest harness exists. Also encoded the audit's proven defects
-  as executable xfail tests so they cannot be silently fixed or reintroduced.
+  Turned the single-page dashboard into a nine-page application with the dark
+  design system from Design.md, and added the first real coverage reporting.
 
 Implementation:
-  + Alembic baseline (0001_baseline), create_all removed from startup (ADR-015)
-  + backend/entrypoint.sh applies migrations before uvicorn, fails fast
-  + pytest harness: conftest fixtures, DORA tests, API contract tests
-  + app/core/logging.py — stdlib logging; PYTHONUNBUFFERED set in the image
-  + CI now runs tests, applies + reverses migrations, and FAILS ON MODEL DRIFT
-  ~ main.py: deprecated on_event -> lifespan
-  ~ dora_metrics.py docstring: removed the claim about a filter that never existed
-  ~ compose: db published on 55432 (5432 clashed with local Postgres); version: removed
-  ~ frontend Dockerfile: npm ci against the committed lockfile
-  + .dockerignore for both tiers (backend excludes .env and tests)
+  + GET /api/repositories — per-repository activity counts and per-stage data
+    coverage, computed from what was actually ingested (PRD 2.6)
+  + Coverage distinguishes AVAILABLE / NO_DATA / NOT_CONFIGURED, and derives
+    analysis confidence from how many of the 4 critical stages are visible
+  + Frontend: design tokens, AppShell + sidebar + topbar, react-router,
+    9 pages, shared filter context, central API client, useAsync hook
+  + Vitest + React Testing Library; 23 frontend tests
+  + Pages without an engine render a PLANNED state, never fake data (ADR-017)
 
-Tests:   17 passed, 3 xfailed
-Migrations verified against real PostgreSQL, all four paths:
-  fresh upgrade / zero autogenerate drift / downgrade to base /
-  upgrade over a pre-existing create_all database with data intact
-Manual:  full stack rebuilt and healthy; entrypoint ran the migration against the
-         existing audit database; 21 PRs + 90 runs survived; /api/metrics/dora
-         returns byte-identical values (PRD constraint 7 satisfied)
+Tests:   backend 26 passed / 3 xfailed; frontend 23 passed; alembic check clean
+Manual:  verified in a real browser at 1280px and 375px — data renders at a
+         90-day window (2.64/wk, 22.7% elevated), the 30-day window correctly
+         renders "—" everywhere, coverage drill-down shows SOURCE 21 / CI 90
+         with the other 8 stages Not configured, mobile collapses to a drawer
 
-PR:      not yet opened; gh CLI still unauthenticated
+PR:      #4
 
-Next:    Stage 1 — Product shell (sidebar, routing, the nine pages, loading /
-         empty / error states) per Design.md. Stage 2 (domain model) now has a
-         safe place to land.
+Next:    Stage 2 — domain model (Service, Integration, Pipeline, Delivery,
+         DeliveryEvent). Capture commit SHA during ingestion first: it is the
+         join key everything downstream needs and nothing stores it yet.
 ```
 
 ---
@@ -353,10 +348,14 @@ gh CLI:           installed but NOT authenticated; no credential helper; no GH_T
 Stack:            builds and runs. 3/3 containers healthy.
 Schema owner:     Alembic. NEVER add create_all back (ADR-015). To change a
                   model you MUST add a migration or CI fails on drift.
-Run tests:        cd backend && ./.venv/bin/python -m pytest   (venv is gitignored;
-                  recreate with: python3 -m venv .venv && .venv/bin/pip install
-                  -r requirements-dev.txt)
-Routes (only 3):  GET /health, GET /api/metrics/dora, POST /api/ingest/sync
+Run tests:        backend  — cd backend && ./.venv/bin/python -m pytest
+                             (venv is gitignored; recreate with python3 -m venv
+                             .venv && .venv/bin/pip install -r requirements-dev.txt)
+                  frontend — cd frontend && npm test
+Demo note:        ingested data spans 2026-05-29..2026-07-19, so the default
+                  30-day window shows "—". Select 90 days to see real numbers.
+Routes:           GET /health, GET /api/metrics/dora, POST /api/ingest/sync,
+                  GET /api/repositories
 Tables (only 3):  repositories, pull_requests, workflow_runs
 Host port clash:  RESOLVED — compose now publishes 55432. Connect from the host
                   with: psql -h localhost -p 55432 -U devpulse -d devpulse

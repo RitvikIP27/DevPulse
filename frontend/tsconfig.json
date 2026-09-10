@@ -10,7 +10,13 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": true
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    // vitest globals and jest-dom's custom matchers are ambient; without them
+    // `expect(...).toBeInTheDocument()` fails to type-check in the test files.
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src"]
+  "include": ["src", "vitest.setup.ts", "vite.config.ts"]
 }
