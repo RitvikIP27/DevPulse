@@ -339,8 +339,12 @@ but re-verify before relying on them after significant change.
 ```text
 Repo root:        /home/ritvik-kant/DevPulse/DevPulse  (nested one level)
 Remote:           https://github.com/RitvikIP27/DevPulse.git
-Branches:         main (LICENSE + README.md ONLY — the MVP is NOT merged)
-                  feat/github-ingestion-dora (the entire MVP, ~3.4k lines, pushed)
+Branches:         main — CONTAINS THE MVP. It was merged via PR #1 on 2026-08-13.
+                  An earlier note here claimed main held only LICENSE + README
+                  and that the MVP was unmerged; that was read off a STALE local
+                  main that had never been fetched. Always `git fetch` before
+                  reasoning about branch topology.
+                  feat/github-ingestion-dora (merged into main, PR #1)
                   docs/stage-0-architecture-audit (Stage 0 work)
                   chore/stage-0-5-foundation (Stage 0.5 work)
 gh CLI:           installed but NOT authenticated; no credential helper; no GH_TOKEN
@@ -422,8 +426,6 @@ Keep this list current.
 - Runtime and incident integrations do not exist.
 - AI RCA is intentionally deferred (ADR-008, AGENTS.md 5).
 - Pipeline discovery is initially configuration-driven (ADR-009).
-- The entire MVP is unmerged on feat/github-ingestion-dora; main holds only
-  LICENSE and README.md.
 ```
 
 Remove items as they are genuinely solved.
