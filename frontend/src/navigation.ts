@@ -24,7 +24,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { path: "/", label: "Overview", icon: "▤", hasData: true },
       { path: "/repositories", label: "Repositories", icon: "◫", hasData: true },
       { path: "/dora", label: "DORA", icon: "◷", hasData: true },
-      { path: "/deliveries", label: "Deliveries", icon: "⇉", hasData: false },
+      { path: "/deliveries", label: "Deliveries", icon: "⇉", hasData: true },
     ],
   },
   {

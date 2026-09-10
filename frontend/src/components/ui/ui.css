@@ -137,3 +137,49 @@
 .coverage-row__fill--no-data { background: var(--warning); width: 12%; }
 .coverage-row__fill--not-configured { background: var(--border); width: 0; }
 .coverage-detail { font-size: 12px; color: var(--text-muted); margin: var(--space-3) 0 0; }
+
+/* ----------------------------- Pipeline trace ---------------------------- */
+.trace { display: flex; flex-direction: column; gap: 0; }
+.trace-stage {
+  display: grid; grid-template-columns: 120px 12px 1fr auto;
+  gap: var(--space-4); align-items: start;
+  padding: var(--space-4) 0; border-bottom: 1px solid var(--border-subtle);
+}
+.trace-stage:last-child { border-bottom: none; }
+.trace-stage--unobserved { opacity: 0.55; }
+.trace-stage__name {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-secondary);
+  padding-top: 2px;
+}
+.trace-stage__rail { position: relative; height: 100%; display: flex; justify-content: center; }
+.trace-stage__dot {
+  width: 10px; height: 10px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; z-index: 1;
+  border: 2px solid var(--bg-primary);
+}
+.trace-stage__dot--success { background: var(--success); }
+.trace-stage__dot--failed { background: var(--danger); }
+.trace-stage__dot--in_progress { background: var(--info); }
+.trace-stage__dot--not_observed { background: var(--border); }
+.trace-stage__line {
+  position: absolute; top: 13px; bottom: -16px; width: 2px; background: var(--border-subtle);
+}
+.trace-stage:last-child .trace-stage__line { display: none; }
+.trace-stage__detail { font-size: 13px; color: var(--text-secondary); margin: 0; }
+.trace-stage__duration { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.trace-runs { margin: var(--space-3) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-1); }
+.trace-runs li { font-size: 12px; color: var(--text-muted); display: flex; gap: var(--space-2); align-items: center; }
+.trace-runs__name { color: var(--text-secondary); }
+
+.evidence-panel {
+  border: 1px solid #1e3350; background: var(--info-soft);
+  border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-6);
+}
+.evidence-panel__label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--info); margin: 0 0 var(--space-2);
+}
+.evidence-panel__body { margin: 0; font-size: 13px; color: var(--text-secondary); }
+
+.delivery-row { cursor: pointer; }
+.delivery-row__title { font-weight: 600; }
+.delivery-row__meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }

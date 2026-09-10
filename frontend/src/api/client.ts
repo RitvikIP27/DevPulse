@@ -116,3 +116,64 @@ export interface SyncJob {
 export function fetchSyncJobs(limit = 20): Promise<{ jobs: SyncJob[] }> {
   return request<{ jobs: SyncJob[] }>(`/ingest/jobs?limit=${limit}`);
 }
+
+/* ------------------------------- Deliveries ------------------------------ */
+
+export type StageStatus = "SUCCESS" | "FAILED" | "IN_PROGRESS" | "NOT_OBSERVED";
+
+export interface StageRun {
+  name: string;
+  status: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  url: string | null;
+  provider: string;
+}
+
+export interface DeliveryStage {
+  stage: PipelineStage;
+  status: StageStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_minutes: number | null;
+  provider: string | null;
+  detail: string;
+  runs: StageRun[];
+}
+
+export interface DeliverySummary {
+  id: string;
+  repository_full_name: string;
+  service: string;
+  commit_sha: string;
+  pull_request_number: number;
+  title: string | null;
+  author_login: string | null;
+  started_at: string;
+  completed_at: string | null;
+  total_duration_minutes: number | null;
+  status: StageStatus;
+  stage_count_observed: number;
+  stage_count_total: number;
+}
+
+export interface DeliveryDetail extends DeliverySummary {
+  stages: DeliveryStage[];
+  correlation: {
+    method: string;
+    confidence: "HIGH" | "MEDIUM" | "LOW";
+    evidence: string;
+    commit_sha: string;
+  };
+}
+
+export function fetchDeliveries(limit = 25): Promise<{
+  deliveries: DeliverySummary[];
+  uncorrelatable_count: number;
+}> {
+  return request(`/deliveries?limit=${limit}`);
+}
+
+export function fetchDelivery(id: string): Promise<DeliveryDetail> {
+  return request<DeliveryDetail>(`/deliveries/${id}`);
+}
