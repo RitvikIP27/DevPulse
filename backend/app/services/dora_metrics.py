@@ -1,13 +1,30 @@
-"""
-Computes the four DORA metrics per repository/service:
+"""MVP delivery indicators, computed per repository.
 
-  - Deployment Frequency : successful 'deploy' workflow runs per week
-  - Lead Time for Changes: median time from PR merge -> next successful deploy
-  - Change Failure Rate  : failed deploy runs / total deploy runs (%)
-  - MTTR                 : median time from a failed deploy -> the next successful deploy
+These are DORA-SHAPED, not DORA-VALID. Every workflow run is treated as a
+deployment, because the MVP has no deployment model, so:
 
-This treats a workflow run whose name contains "deploy" as a deployment event.
-Adjust `workflow_name_filter` in github_client.py if your pipelines are named differently.
+  - Deployment Frequency  successful workflow runs per week. Counts CI and
+                          infrastructure runs. Measured on a real repository
+                          this overstated deployments by roughly 5.7x.
+  - Lead Time             PR merge -> next successful run of ANY workflow.
+                          A merge triggers CI within seconds, so this collapses
+                          toward zero for every PR and effectively measures
+                          webhook latency.
+  - Change Failure Rate   failed runs / completed runs. Weights a flaky lint job
+                          the same as a rolled-back release.
+  - MTTR                  failed run -> next successful run, which is usually an
+                          unrelated concurrent workflow.
+
+Evidence for each of these is in docs/architecture-audit.md section 3, and each
+is locked in an xfail test in tests/test_dora_metrics.py::TestKnownDefects that
+will start failing the moment the defect is fixed.
+
+Replacing this with real delivery semantics is ADR-010: Stage 5 introduces an
+explicit deployment model and Stage 7 rebuilds these metrics on delivery traces.
+
+An earlier version of this docstring claimed runs were filtered to names
+containing "deploy" via a `workflow_name_filter` in github_client.py. No such
+filter has ever existed; the connector stores every run.
 """
 from datetime import datetime, timedelta, timezone
 from statistics import median

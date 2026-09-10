@@ -15,3 +15,8 @@ frontend/dist/
 
 # OS
 .DS_Store
+
+# Test / tooling artifacts
+.pytest_cache/
+.coverage
+htmlcov/

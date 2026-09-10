@@ -1,11 +1,26 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.database import Base, engine
-from app.models import events  # noqa: F401 — registers models on Base.metadata
-from app.api import routes_metrics, routes_ingest
+from app.api import routes_ingest, routes_metrics
+from app.core.logging import configure_logging
 
-app = FastAPI(title="DevPulse API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup and shutdown.
+
+    Schema creation deliberately does NOT happen here. It is owned by Alembic and
+    applied by the container entrypoint before the server starts, so that schema
+    changes have migration history instead of being silently inferred from the
+    models at boot (rules.md 13).
+    """
+    configure_logging()
+    yield
+
+
+app = FastAPI(title="DevPulse API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,12 +31,6 @@ app.add_middleware(
 
 app.include_router(routes_metrics.router)
 app.include_router(routes_ingest.router)
-
-
-@app.on_event("startup")
-def on_startup():
-    # For a real project use Alembic migrations instead of create_all.
-    Base.metadata.create_all(bind=engine)
 
 
 @app.get("/health")

@@ -361,3 +361,82 @@ This creates:
 - safer iteration
 - cleaner Git history
 - easier rollback
+
+---
+
+# ADR-015 — Alembic Owns the Schema; No create_all at Startup
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 0.5
+
+## Context
+
+The MVP created its schema with `Base.metadata.create_all` in a FastAPI startup
+hook, while `alembic` sat in `requirements.txt` unused with no migration tree.
+
+`create_all` only ever creates missing tables. It never alters an existing one.
+Every stage from here adds or changes columns and tables — normalized events,
+deliveries, deployments, sync jobs — so under `create_all` a model change would
+apply silently on a fresh database and not at all on an existing one, leaving
+environments quietly divergent.
+
+## Decision
+
+Alembic is the single owner of schema. `create_all` is removed from application
+startup. Migrations are applied by the container entrypoint before uvicorn
+starts, and the entrypoint fails fast so a container cannot come up healthy
+against a schema it does not match.
+
+Revision `0001_baseline` snapshots the MVP schema exactly. It creates each table
+only when absent, because development and demo databases already contain those
+tables from the `create_all` era — including the volume holding the Stage 0 audit
+fixture. That guard is specific to the baseline; later migrations describe real
+deltas and must not copy the pattern.
+
+## Why
+
+Satisfies rules.md 13. Makes schema evolution reviewable in the diff, reversible,
+and identical across environments.
+
+CI enforces this: it applies migrations to an empty database, downgrades to base,
+then runs `alembic revision --autogenerate` and fails if any operation is
+produced. A model changed without a migration cannot merge.
+
+## Rejected Alternative
+
+Asking existing environments to run `alembic stamp head` by hand. It cannot be
+automated in the entrypoint and silently diverges for anyone who forgets.
+
+---
+
+# ADR-016 — Known Defects Are Locked in Executable Tests
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 0.5
+
+## Context
+
+The Stage 0 audit proved several defects with live data: CI runs counted as
+deployments, lead time collapsing to zero, and absent data reporting as `0.0`
+and ranking as the healthiest service.
+
+These defects are fixed by later stages. Recording them only in prose risks them
+being forgotten, half-fixed, or — worse — fixed without anyone noticing, leaving
+the documentation permanently wrong.
+
+## Decision
+
+Each proven defect gets a test asserting the behaviour the product *requires*,
+marked `xfail(strict=True)` with a reason naming the fixing stage.
+
+## Why
+
+The defect becomes executable rather than narrative. The suite stays green while
+the defect stands, and `strict=True` means that the moment the behaviour is
+fixed the test fails loudly — forcing the marker to be removed and the fix to be
+acknowledged. A defect cannot be silently fixed or silently reintroduced.
+
+This is how PRD section 5's ground-truth expectations enter the codebase before
+the engine capable of satisfying them exists.

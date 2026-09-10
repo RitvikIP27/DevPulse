@@ -1,11 +1,12 @@
 # Local development stack: Postgres + FastAPI backend + React frontend.
+#
 # Usage:
 #   1. cp backend/.env.example backend/.env   (fill in GITHUB_TOKEN + GITHUB_REPOS)
 #   2. docker compose up --build
 #   3. Backend:  http://localhost:8000/docs
 #      Frontend: http://localhost:5173
-
-version: "3.9"
+#
+# Database migrations are applied by the backend entrypoint before the API starts.
 
 services:
   db:
@@ -15,7 +16,12 @@ services:
       POSTGRES_PASSWORD: devpulse
       POSTGRES_DB: devpulse
     ports:
-      - "5432:5432"
+      # Published on 55432, not 5432, because a developer machine running
+      # engineering tooling very often already has a local Postgres bound to
+      # 5432 — which made the documented quickstart fail outright. The backend
+      # reaches the database over the compose network on 5432 regardless; this
+      # mapping exists only for psql from the host.
+      - "55432:5432"
     volumes:
       - devpulse_pgdata:/var/lib/postgresql/data
     healthcheck:
