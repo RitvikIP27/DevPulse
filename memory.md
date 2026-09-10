@@ -292,33 +292,42 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   3 — Delivery traces
+Stage:   5 — Real deployment model
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  feat/stage-3-delivery-traces
+Branch:  feat/stage-5-deployment-model
 
 Summary:
-  The flagship feature works. DevPulse reconstructs a change's lifecycle by
-  correlating a merged PR to every workflow run reporting the same merge commit.
+  THE CI PROXY IS GONE. DORA is computed from Deployment records, and all three
+  xfail defect locks are now ordinary passing tests.
 
 Implementation:
-  + services/deliveries.py — trace reconstruction, derived on read (ADR-020)
-  + GET /api/deliveries, GET /api/deliveries/{id}
-  + Deliveries page: list + pipeline trace with correlation evidence panel
-  + 10 pipeline stages; only SOURCE/REVIEW/CI observable, rest NOT_OBSERVED
-  + NOT_OBSERVED is distinct from FAILED — missing runtime data never makes a
-    delivery look failed (ADR-011)
+  + migration 0003: deployments + deployment_rules tables
+  + services/deployments.py — two sources, never mixed (ADR-021):
+      github_deployments (authoritative) > configured_workflow (declared)
+      no source => metrics null + reason. NEVER falls back to counting CI runs.
+  + dora_metrics rewritten: all FIVE current DORA metrics, all nullable
+  + deployment rule CRUD API + Settings UI to declare the deploy workflow
+  + Overview/DORA rewritten; unmeasurable services excluded from aggregates
+    and sorted LAST (an unmeasurable service is not a healthy one)
 
-Tests:   backend 66 passed / 3 xfailed; frontend 23 passed
-Manual:  real traces from RitvikIP27/KubernesDeployment. PR #27 -> 10 runs on
-         commit 13be8d5bc3, CI FAILED, review 5m, CI 12.9h, 3/10 stages observed.
-         uncorrelatable_count = 0.
+MEASURED EFFECT on RitvikIP27/KubernesDeployment (90d):
+  deployment frequency  2.64/wk -> 0.47/wk   (5.6x correction; audit predicted 5.7x)
+  change fail rate      21.3%   -> 53.8%     (CD workflow genuinely fails a lot)
+  lead time             0.0h    -> 5m        (merge -> deploy of that same commit)
+  recovery                 n/a  -> 37m
+  rework rate              n/a  -> 15.4%
+  rule "CD Workflow" matched 24 runs -> 6 success + 7 failed production deploys
 
-PR:      #6
+Tests:   backend 71 passed, 0 xfailed (was 66 + 3 xfail); frontend 24 passed
+Manual:  verified in browser. DevPulse repo (no rule) correctly shows "—"
+         everywhere with an explanation, not zeros.
 
-Next:    Stage 5 real deployment model (flip the xfail on CI-as-deployment), or
-         Stage 8/9 baselines + bottleneck engine (Bottlenecks page is still a
-         placeholder and stage durations now exist to feed it).
+PR:      #8
+
+Next:    Stage 8/9 — historical baselines + deterministic bottleneck engine.
+         Stage durations exist in delivery traces; Bottlenecks page is still a
+         placeholder. Or Stage 6 pipeline mapping UI expansion.
 ```
 
 ---
@@ -411,12 +420,10 @@ Docstring lies:
 Keep this list current.
 
 ```text
-- Production deployment identification is not yet modeled at all; every workflow
-  run is treated as a deployment, inflating deployment frequency ~5.7x.
-- Lead time, MTTR and change failure rate are measurement artifacts, not metrics.
-  See section 13b. They are now labelled CI-proxy derived in the README.
-- Missing data is rendered as 0.0 / "—" rather than "unavailable", violating
-  PRD 2.6 and rules.md 11. No coverage or confidence model exists yet.
+- Deployment identification depends on a human declaring the deploy workflow
+  unless the repository uses a real deployment provider (ADR-021).
+- Rework rate is a lower bound: remediation not preceded by an observed
+  deployment failure is invisible without incident data.
 - Ingestion has no incremental cursor yet: every sync refetches the window and
   stops at a 10-page ceiling.
 - Runtime and incident integrations do not exist.

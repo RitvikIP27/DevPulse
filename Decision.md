@@ -609,3 +609,66 @@ time collapse to zero.
 Unobserved stages carry no verdict. A delivery is not FAILED because runtime
 telemetry is missing (ADR-011); `NOT_OBSERVED` is a distinct status from
 `FAILED`.
+
+---
+
+# ADR-021 — Deployments Come From a Provider or a Declared Rule, Never From CI
+
+**Status:** Accepted · supersedes the MVP behaviour described in ADR-010
+**Date:** 2026-09-10
+**Stage:** 5
+
+## Context
+
+ADR-010 established that a successful CI run is not a production deployment. It
+did not say where deployments should come from instead.
+
+Most repositories have no deployment platform. The audited repository has no
+GitHub Deployments and no configured environments — but it does have a workflow
+named "CD Workflow" that performs deployment. Something has to bridge that gap
+without guessing.
+
+## Decision
+
+Deployments are resolved from one of two sources, in order of authority:
+
+1. **`github_deployments`** — the provider's own Deployments API. Authoritative:
+   the platform is asserting that a commit reached an environment.
+2. **`configured_workflow`** — a rule a human declared, naming which workflow
+   deploys. Used only when no deployment provider exists (ADR-009: explicit
+   configuration before automatic discovery).
+
+The two are never mixed. If the provider supplied any deployment, rule-derived
+rows are ignored, because blending an authoritative source with a declared one
+produces a number no one can explain.
+
+When neither yields anything, every deployment-derived metric reports `null`
+with a reason. There is no fallback to counting CI runs.
+
+## Why
+
+Heuristics were the original defect. Matching workflow names containing "deploy"
+would have recreated it in a subtler form: on the audited repository that
+substring also matches infrastructure workflows.
+
+## Measured effect
+
+Configuring the real deployment workflow on the audited repository moved
+deployment frequency from **2.64/week to 0.47/week — a 5.6x correction**, closely
+matching the 5.7x overstatement the Stage 0 audit predicted. Change fail rate
+moved from 21.3% to **53.8%**, because the CD workflow genuinely fails far more
+often than the CI runs that were diluting it.
+
+Lead time is now measured from a pull request merging to the deployment carrying
+that same commit, matched by commit rather than by time order. This is what the
+MVP got wrong: it took the next successful run after a merge, which was always
+the CI job the merge itself triggered.
+
+## Consequence
+
+Removing a rule deletes the deployments derived from it. Those rows were an
+interpretation of CI runs, and keeping them would leave metrics alive on a
+mapping the user has withdrawn.
+
+All three `xfail(strict=True)` defect locks from ADR-016 are now ordinary
+passing tests, and their markers have been removed as that ADR requires.

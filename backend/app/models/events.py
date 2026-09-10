@@ -102,6 +102,68 @@ class WorkflowRun(Base):
     repository = relationship("Repository", back_populates="workflow_runs")
 
 
+class DeploymentRule(Base):
+    """Declares which CI workflow represents a deployment for a repository.
+
+    DevPulse prefers a real deployment provider. When none exists — no GitHub
+    Deployments, no ArgoCD — the alternative is either to guess, or to let a
+    human state the mapping. ADR-009 chooses explicit configuration: guessing is
+    what produced the MVP's inflated deployment counts.
+
+    A rule turns matching workflow runs into Deployment records. Without a rule,
+    and without a deployment provider, deployment-derived metrics report as
+    unavailable rather than falling back to counting every CI run.
+    """
+
+    __tablename__ = "deployment_rules"
+    __table_args__ = (
+        UniqueConstraint("repository_id", "workflow_name_pattern", "environment",
+                         name="uq_deployment_rule"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    #: Case-insensitive substring matched against the workflow name.
+    workflow_name_pattern = Column(String, nullable=False)
+    environment = Column(String, nullable=False, default="production")
+    is_production = Column(Boolean, nullable=False, default=True)
+
+    repository = relationship("Repository")
+
+
+class Deployment(Base):
+    """A deployment of a specific commit into a specific environment.
+
+    Deliberately separate from WorkflowRun. A workflow run is a CI fact; a
+    deployment is a delivery fact. Conflating them is ADR-010, and the audit
+    measured the cost: deployment frequency overstated roughly 5.7x.
+    """
+
+    __tablename__ = "deployments"
+    __table_args__ = (
+        UniqueConstraint("repository_id", "provider", "external_id", name="uq_deployment_external"),
+        Index("ix_deployments_commit_sha", "commit_sha"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+
+    #: github_deployments (authoritative) or configured_workflow (declared).
+    provider = Column(String, nullable=False)
+    external_id = Column(String, nullable=False)
+
+    environment = Column(String, nullable=False)
+    is_production = Column(Boolean, nullable=False, default=True)
+
+    commit_sha = Column(String, nullable=True)
+    status = Column(String, nullable=False)  # SUCCESS / FAILED / IN_PROGRESS
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    url = Column(String, nullable=True)
+
+    repository = relationship("Repository")
+
+
 class SyncJob(Base):
     """The outcome of one ingestion run.
 
