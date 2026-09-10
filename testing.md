@@ -658,6 +658,20 @@ When a feature depends on real PostgreSQL behaviour — JSON containment,
 concurrent upserts, constraint semantics — it needs an integration test against
 a live database (section 4), not a SQLite unit test.
 
+## Configuration in tests
+
+Settings are loaded from `backend/.env`, so ambient configuration can silently
+change what the suite asserts. It did: five provider-availability tests passed
+in CI and failed on a developer machine purely because a local `.env` had
+`DEMO_MODE=true`.
+
+An autouse fixture in `conftest.py` therefore neutralises every
+environment-sensitive setting before each test. Anything needing a provider
+switched on turns it on explicitly, via a named fixture.
+
+**A test that depends on the machine it runs on is not a test.** When adding a
+setting that changes behaviour, add it to that fixture.
+
 ## Time in tests
 
 The metrics engine derives its look-back window from the wall clock. Test events
