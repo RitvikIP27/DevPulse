@@ -8,3 +8,4 @@ python-dotenv==1.0.1
 pydantic==2.9.2
 pydantic-settings==2.5.2
 python-jose[cryptography]==3.3.0
+anthropic==1.4.0        # optional AI layer; imported lazily so its absence never breaks the API

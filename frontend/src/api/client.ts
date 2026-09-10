@@ -332,3 +332,112 @@ export interface ConflictListResponse {
 export function fetchConflicts(windowDays = 30): Promise<ConflictListResponse> {
   return request<ConflictListResponse>(`/conflicts?window_days=${windowDays}`);
 }
+
+/* -------------------------------- Analysis ------------------------------- */
+
+export interface AnalysisCandidate {
+  deployment_id: number;
+  repository_full_name: string;
+  service: string;
+  environment: string;
+  commit_sha: string | null;
+  deployment_status: string;
+  deployed_at: string;
+  conflict_count: number;
+  incident_count: number;
+  coverage_confidence: AnalysisConfidence;
+}
+
+export interface EvidenceStage {
+  stage: PipelineStage;
+  status: string;
+  duration_minutes: number | null;
+  detail: string;
+}
+
+export interface EvidencePackage {
+  evidence_hash: string;
+  generated_at: string;
+  repository_full_name: string;
+  service: string;
+  deployment_id: number;
+  environment: string;
+  commit_sha: string | null;
+  deployment_status: string;
+  deployed_at: string;
+  pull_request_number: number | null;
+  pull_request_title: string | null;
+  author_login: string | null;
+  stages: EvidenceStage[];
+  bottlenecks: StageAnalysis[];
+  runtime: RuntimeComparison;
+  incidents: {
+    title: string | null;
+    status: string;
+    started_at: string;
+    resolved_at: string | null;
+    minutes_after_deployment: number | null;
+  }[];
+  conflicts: Conflict[];
+  coverage: {
+    confidence: AnalysisConfidence;
+    confidence_reason: string;
+    observed_stages: PipelineStage[];
+    unobserved_stages: PipelineStage[];
+  };
+  known_limitations: string[];
+}
+
+export type RcaConfidence = "HIGH" | "MEDIUM" | "LOW" | "INSUFFICIENT";
+
+export interface Hypothesis {
+  hypothesis: string;
+  supporting_evidence: string[];
+  contradicting_evidence: string[];
+  confidence: RcaConfidence;
+}
+
+export interface RcaResult {
+  summary: string;
+  likely_cause: string;
+  confidence: RcaConfidence;
+  affected_stage: string | null;
+  impact: string;
+  observed_facts: string[];
+  inferences: string[];
+  alternative_hypotheses: Hypothesis[];
+  recommended_investigation: string[];
+  recommended_actions: string[];
+  unknowns: string[];
+}
+
+export interface RcaResponse {
+  available: boolean;
+  unavailable_reason: string | null;
+  evidence_hash: string | null;
+  provider: string | null;
+  model: string | null;
+  prompt_version: string | null;
+  generated_at: string | null;
+  cached: boolean;
+  result: RcaResult | null;
+  integrity_warnings: string[];
+}
+
+export function fetchAnalysisCandidates(): Promise<{ candidates: AnalysisCandidate[] }> {
+  return request<{ candidates: AnalysisCandidate[] }>("/analysis/candidates");
+}
+
+export function fetchEvidence(deploymentId: number): Promise<EvidencePackage> {
+  return request<EvidencePackage>(`/analysis/evidence/${deploymentId}`);
+}
+
+export async function requestRca(deploymentId: number, force = false): Promise<RcaResponse> {
+  const response = await fetch(`${BASE}/analysis/rca/${deploymentId}?force=${force}`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new ApiError("Could not run the analysis.", response.status);
+  }
+  return response.json() as Promise<RcaResponse>;
+}

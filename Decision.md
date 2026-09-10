@@ -793,3 +793,68 @@ Because most repositories have no monitoring, the synthetic reference scenarios
 from PRD 5 are seeded by `python -m app.demo_seed` into a clearly marked demo
 repository, with every record carrying a `demo` provider. Demo data is never
 written to a real repository, and `DEMO_MODE` gates whether it is readable.
+
+---
+
+# ADR-024 — AI Receives a Deterministic Evidence Package and Nothing Else
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 15/16
+
+## Context
+
+ADR-008 deferred AI until the deterministic pipeline could establish facts.
+That pipeline now exists: delivery traces, baselines, bottleneck scoring,
+runtime comparison, conflict detection and coverage.
+
+## Decision
+
+`services/evidence.py` assembles one `EvidencePackage` per deployment from those
+engines. The AI layer receives that object serialised, and nothing else. It has
+no database session, no provider credentials, no log access.
+
+Three guards sit around it:
+
+**Structured output.** The model must return the `RcaResult` schema, which
+separates `observed_facts` from `inferences`, requires `alternative_hypotheses`
+with their supporting and contradicting evidence, and requires `unknowns`. Prose
+is where unsupported certainty hides; a schema makes the model commit to which
+category each statement belongs in.
+
+**Integrity checking.** Numeric claims in the summary, likely cause and observed
+facts are checked against the evidence text. Anything unsupported is returned as
+an `integrity_warning` and rendered next to the analysis. This cannot prove an
+analysis sound, and is not meant to — it catches the specific failure that
+matters most, a confident-looking figure the model produced rather than read.
+
+**Caching by evidence hash.** An analysis is stored with the exact evidence,
+model, and prompt version that produced it. Identical facts reuse the stored
+result rather than being paid for again, and any analysis can be traced back to
+its inputs.
+
+## Internal consistency
+
+The delivery trace is built from source control alone, so it marks DEPLOYMENT,
+RUNTIME and INCIDENT unobserved regardless of what other providers reported. The
+evidence builder reconciles those three stages against the deployment, runtime
+comparison and incidents before assembly. Without that, a package could state
+runtime was not observed while also carrying a runtime-degradation conflict, and
+self-contradictory evidence is exactly what must never reach a model.
+
+## Degradation
+
+With no provider configured the evidence package is still built and returned,
+with an explicit reason. The deterministic layer is the product; AI is an
+interpretation of it, and its absence must not hide the facts.
+
+The vendor SDK is imported lazily inside the provider. A module-level import
+would take the whole API down if the optional dependency were missing — an
+optional feature must never be able to break the deterministic core.
+
+## Provider abstraction
+
+`AIProvider` is a Protocol. `AnthropicProvider` is the only implementation
+today; tests drive a fake. No test calls a real model: that would be slow, cost
+money, and make the suite non-deterministic — and what is under test is
+DevPulse's handling of model output, not the model.

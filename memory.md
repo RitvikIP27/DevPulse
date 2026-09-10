@@ -292,45 +292,52 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   12 + 13 + 14 — Runtime, incidents, and cross-system conflict detection
+Stage:   15 + 16 — Evidence package and AI RCA
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  feat/stage-12-14-runtime-incidents-conflicts
+Branch:  feat/stage-15-16-evidence-ai-rca
 
 Summary:
-  THE DIFFERENTIATOR WORKS. DevPulse detects that a deployment reported SUCCESS
-  while the application it shipped degraded — and refuses to call it a cause.
+  AI is finally switched on — as an interpretation layer over deterministic
+  evidence, exactly as ADR-008 required. Analysis page is real. NO placeholders
+  remain in the product.
 
 Implementation:
-  + migration 0004: runtime_observations + incidents
-  + connectors/prometheus.py (query_range, NaN = absence not zero)
-  + connectors/pagerduty.py (incidents by configured service id)
-  + services/conflicts.py — before/after comparison + conflict detection
-  + services/providers.py — one place answering "can we read runtime/incidents"
-  + GET /api/conflicts ; Health page is now real
-  + app/demo_seed.py — PRD 5 synthetic scenarios in a MARKED demo repo
+  + migration 0005: rca_analyses (evidence_hash, model, prompt_version, result)
+  + services/evidence.py — one EvidencePackage per deployment, assembled from
+    traces + baselines + bottlenecks + runtime + conflicts + coverage
+  + services/ai/ — AIProvider Protocol, AnthropicProvider, versioned prompts
+  + services/ai/rca.py — cache by evidence hash, integrity check, graceful
+    degradation when unconfigured
+  + GET /api/analysis/candidates | /evidence/{id} ; POST /api/analysis/rca/{id}
+  + Analysis page: evidence always, AI section when configured
 
-  ADR-023: strength vocabulary is CORRELATED / POTENTIALLY_RELATED only.
-  There is NO "CAUSED". A test asserts "caused" never appears in evidence
-  except inside an explicit unknown.
+  ADR-024 guards:
+    structured RcaResult schema separates observed_facts from inferences and
+      REQUIRES alternative_hypotheses + unknowns
+    integrity check flags numbers not present in the evidence
+    caching by evidence hash = reproducibility + cost control
+    anthropic SDK imported LAZILY so a missing optional dep cannot break the API
 
-  False-positive guards: <3 samples/side = no verdict; <50% worsening = noise;
-  improvements are never degradations (direction is per-metric); incidents >60m
-  after a deploy are not associated.
+  Model: claude-opus-5, adaptive thinking, structured outputs via messages.parse
 
-VERIFIED on the seeded scenarios:
-  degraded deploy: error_rate 0.8 -> 18.4 (+2200%), latency 180 -> 910 (+405.6%)
-                   status SUCCESS + CONFLICT(CORRELATED) + 1 incident
-  healthy deploy:  0.8 -> 0.8, NO conflict (no false positive)
-  with no providers: "cannot determine whether production stayed healthy"
+FIXED during this stage:
+  - candidates endpoint built a full evidence package per deployment (ran
+    bottleneck detection per row): 1.6s -> 0.24s
+  - evidence package contradicted itself (RUNTIME NOT_OBSERVED while carrying a
+    runtime conflict). DEPLOYMENT/RUNTIME/INCIDENT stages are now reconciled
+    against real data before assembly.
 
-Tests:   backend 111 passed, 0 xfailed; frontend 24 passed
+Tests:   backend 136 passed, 0 xfailed; frontend 24 passed
+         AI path tested via a FakeProvider — no test calls a real model.
 
-PR:      #10
+NOTE: no ANTHROPIC_API_KEY on this machine, so the unconfigured path is what was
+      verified live. Set ANTHROPIC_API_KEY in backend/.env to enable RCA.
 
-Next:    Stage 10 anomaly engine, or Stage 15/16 evidence package + AI RCA.
-         AI is now unblocked: deterministic evidence (traces, baselines,
-         bottlenecks, conflicts, coverage) all exist for it to reason over.
+PR:      #12
+
+Next:    Stage 10 anomaly engine, Stage 18 health scoring, Stage 22 webhooks,
+         Stage 23 auth. See README roadmap.
 ```
 
 ---
