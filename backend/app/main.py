@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_ingest, routes_metrics, routes_repositories
+from app.api import routes_deliveries, routes_ingest, routes_metrics, routes_repositories
 from app.core.logging import configure_logging
 
 
@@ -32,6 +32,7 @@ app.add_middleware(
 app.include_router(routes_metrics.router)
 app.include_router(routes_ingest.router)
 app.include_router(routes_repositories.router)
+app.include_router(routes_deliveries.router)
 
 
 @app.get("/health")

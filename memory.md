@@ -292,42 +292,33 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   2 — Ingestion correctness and correlation keys
+Stage:   3 — Delivery traces
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  feat/stage-2-ingestion-correlation-keys
+Branch:  feat/stage-3-delivery-traces
 
 Summary:
-  CORRELATION IS NOW POSSIBLE. Ingestion captures commit SHAs, and every sync
-  records what it actually did instead of failing silently.
+  The flagship feature works. DevPulse reconstructs a change's lifecycle by
+  correlating a merged PR to every workflow run reporting the same merge commit.
 
 Implementation:
-  + migration 0002: head_sha/head_branch/event/status/run_attempt/html_url on
-    workflow_runs; head_sha/merge_commit_sha/branches/author/closed_at/html_url
-    on pull_requests; sync_jobs table; unique (repository_id, github_pr_number)
-    with a dedupe step first, since the MVP upsert was racy
-  + services/timestamps.py — tz-aware parse -> naive UTC, one helper (fixes the
-    strptime that raised on any offset form)
-  + services/errors.py — provider error taxonomy (architecture.md 11);
-    403 + x-ratelimit-remaining:0 is RATE_LIMIT, not AUTHORIZATION_ERROR
-  + connector rewrite: Link-header pagination (was hard-capped at 3x50 and
-    silently truncating), bounded retries on rate-limit/5xx only, rate-limit
-    reserve, structured logging, SyncJob per repository
-  + GET /api/ingest/jobs; POST /api/ingest/sync now returns 202 not 200
-  + repositories endpoint gains last_sync + correlatable_run_pct
-  + UI: Last sync column, correlation readiness in the coverage panel
+  + services/deliveries.py — trace reconstruction, derived on read (ADR-020)
+  + GET /api/deliveries, GET /api/deliveries/{id}
+  + Deliveries page: list + pipeline trace with correlation evidence panel
+  + 10 pipeline stages; only SOURCE/REVIEW/CI observable, rest NOT_OBSERVED
+  + NOT_OBSERVED is distinct from FAILED — missing runtime data never makes a
+    delivery look failed (ADR-011)
 
-Tests:   backend 55 passed / 3 xfailed (was 26); frontend 23 passed
-Manual:  live sync -> SUCCESS, 21 PRs + 90 runs, 4.2s, logged.
-         90/90 runs carry head_sha, 21/21 PRs carry merge_commit_sha, and PRs
-         JOIN to the runs that shipped them (PR #27 -> 10 linked runs).
-         correlatable_run_pct = 100%.
+Tests:   backend 66 passed / 3 xfailed; frontend 23 passed
+Manual:  real traces from RitvikIP27/KubernesDeployment. PR #27 -> 10 runs on
+         commit 13be8d5bc3, CI FAILED, review 5m, CI 12.9h, 3/10 stages observed.
+         uncorrelatable_count = 0.
 
-PR:      #5
+PR:      #6
 
-Next:    Stage 3/4 — normalized DeliveryEvent model, then correlate into
-         Delivery traces using merge_commit_sha = head_sha. The join is proven
-         to work on real data; the domain model is what is missing.
+Next:    Stage 5 real deployment model (flip the xfail on CI-as-deployment), or
+         Stage 8/9 baselines + bottleneck engine (Bottlenecks page is still a
+         placeholder and stage durations now exist to feed it).
 ```
 
 ---
@@ -361,7 +352,8 @@ Run tests:        backend  — cd backend && ./.venv/bin/python -m pytest
 Demo note:        ingested data spans 2026-05-29..2026-07-19, so the default
                   30-day window shows "—". Select 90 days to see real numbers.
 Routes:           GET /health, GET /api/metrics/dora, GET /api/repositories,
-                  POST /api/ingest/sync (202), GET /api/ingest/jobs
+                  POST /api/ingest/sync (202), GET /api/ingest/jobs,
+                  GET /api/deliveries, GET /api/deliveries/{id}
 Tables (only 3):  repositories, pull_requests, workflow_runs
 Host port clash:  RESOLVED — compose now publishes 55432. Connect from the host
                   with: psql -h localhost -p 55432 -U devpulse -d devpulse

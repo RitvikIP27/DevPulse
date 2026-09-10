@@ -566,3 +566,46 @@ token instead of waiting for the quota to reset.
 
 PRD 2.6 requires DevPulse to report data coverage honestly. Coverage cannot be
 honest if the system does not know whether its own ingestion succeeded.
+
+---
+
+# ADR-020 — Delivery Traces Are Derived on Read, Not Persisted
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 3
+
+## Context
+
+A delivery trace links a merged pull request to every record reporting the same
+commit. The obvious implementation is a `deliveries` table populated during
+ingestion.
+
+## Decision
+
+Traces are computed on read from the records already stored.
+
+## Why
+
+The inputs are persisted and the computation is deterministic, so the trace adds
+no information the database lacks. Deriving means a change to the correlation
+rules takes effect immediately, rather than requiring a backfill of every
+historical trace — which matters while those rules are still being developed.
+
+## When this changes
+
+Persist traces once correlation spans providers that arrive out of order, or
+once trace assembly becomes too expensive to run per request. Neither is true
+with one provider and a commit-keyed lookup.
+
+## Correlation constraint
+
+Only exact commit-SHA matches link records. Timestamp proximity is never used to
+establish identity (rules.md 9). A merged pull request with no merge commit is
+counted and reported as uncorrelatable rather than attached to whichever change
+is nearest in time — which is precisely the mistake that made the MVP's lead
+time collapse to zero.
+
+Unobserved stages carry no verdict. A delivery is not FAILED because runtime
+telemetry is missing (ADR-011); `NOT_OBSERVED` is a distinct status from
+`FAILED`.

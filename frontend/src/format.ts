@@ -25,3 +25,10 @@ export function formatRelativeDate(iso: string | null): string {
   const months = Math.floor(days / 30);
   return months === 1 ? "1 month ago" : `${months} months ago`;
 }
+
+export function formatMinutes(minutes: number | null): string {
+  if (minutes === null) return UNAVAILABLE;
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  if (minutes < 60 * 48) return `${(minutes / 60).toFixed(1)}h`;
+  return `${(minutes / 1440).toFixed(1)}d`;
+}
