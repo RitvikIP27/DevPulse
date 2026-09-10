@@ -1,7 +1,9 @@
 FROM node:20-slim AS build
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+# Copy the lockfile too and use `npm ci`, so an image build installs the exact
+# dependency tree the repository pins rather than re-resolving it.
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 RUN npm run build
 

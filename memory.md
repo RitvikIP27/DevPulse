@@ -292,30 +292,41 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   0 — Repository Audit
+Stage:   0.5 — Foundation (migrations, tests, honesty fixes)
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  docs/stage-0-architecture-audit
+Branch:  chore/stage-0-5-foundation
 
 Summary:
-  Audited the MVP by RUNNING it, not by reading it. Full Docker Compose stack
-  came up healthy, a real sync against RitvikIP27/KubernesDeployment ingested
-  21 PRs and 90 workflow runs, and the resulting data was interrogated in SQL.
-  25 findings registered by severity in docs/architecture-audit.md.
+  Put the two things every later stage lands on in place: Alembic owns the
+  schema, and a pytest harness exists. Also encoded the audit's proven defects
+  as executable xfail tests so they cannot be silently fixed or reintroduced.
 
-Files changed:
-  + docs/architecture-audit.md   (Stage 0 audit, evidence-backed)
-  ~ README.md                    (metrics relabelled CI-proxy derived; broken
-                                  code fence fixed; target architecture added)
-  + the 9 governance docs moved into the repo root (were unversioned)
+Implementation:
+  + Alembic baseline (0001_baseline), create_all removed from startup (ADR-015)
+  + backend/entrypoint.sh applies migrations before uvicorn, fails fast
+  + pytest harness: conftest fixtures, DORA tests, API contract tests
+  + app/core/logging.py — stdlib logging; PYTHONUNBUFFERED set in the image
+  + CI now runs tests, applies + reverses migrations, and FAILS ON MODEL DRIFT
+  ~ main.py: deprecated on_event -> lifespan
+  ~ dora_metrics.py docstring: removed the claim about a filter that never existed
+  ~ compose: db published on 55432 (5432 clashed with local Postgres); version: removed
+  ~ frontend Dockerfile: npm ci against the committed lockfile
+  + .dockerignore for both tiers (backend excludes .env and tests)
 
-Tests:   none yet — the test harness does not exist (Finding 9)
-PR:      not yet opened; gh CLI is unauthenticated on this machine
+Tests:   17 passed, 3 xfailed
+Migrations verified against real PostgreSQL, all four paths:
+  fresh upgrade / zero autogenerate drift / downgrade to base /
+  upgrade over a pre-existing create_all database with data intact
+Manual:  full stack rebuilt and healthy; entrypoint ran the migration against the
+         existing audit database; 21 PRs + 90 runs survived; /api/metrics/dora
+         returns byte-identical values (PRD constraint 7 satisfied)
 
-Known limitations: see section 14
+PR:      not yet opened; gh CLI still unauthenticated
 
-Next:    Stage 0.5 — Foundation (Alembic baseline, pytest harness, and the
-         cheap-but-blocking ingestion correctness fixes)
+Next:    Stage 1 — Product shell (sidebar, routing, the nine pages, loading /
+         empty / error states) per Design.md. Stage 2 (domain model) now has a
+         safe place to land.
 ```
 
 ---
@@ -328,17 +339,27 @@ but re-verify before relying on them after significant change.
 ```text
 Repo root:        /home/ritvik-kant/DevPulse/DevPulse  (nested one level)
 Remote:           https://github.com/RitvikIP27/DevPulse.git
-Branches:         main (LICENSE + README.md ONLY — the MVP is NOT merged)
-                  feat/github-ingestion-dora (the entire MVP, ~3.4k lines, pushed)
+Branches:         main — CONTAINS THE MVP. It was merged via PR #1 on 2026-08-13.
+                  An earlier note here claimed main held only LICENSE + README
+                  and that the MVP was unmerged; that was read off a STALE local
+                  main that had never been fetched. Always `git fetch` before
+                  reasoning about branch topology.
+                  feat/github-ingestion-dora (merged into main, PR #1)
                   docs/stage-0-architecture-audit (Stage 0 work)
+                  chore/stage-0-5-foundation (Stage 0.5 work)
 gh CLI:           installed but NOT authenticated; no credential helper; no GH_TOKEN
                   => cannot push or open PRs without the user acting first
 
 Stack:            builds and runs. 3/3 containers healthy.
+Schema owner:     Alembic. NEVER add create_all back (ADR-015). To change a
+                  model you MUST add a migration or CI fails on drift.
+Run tests:        cd backend && ./.venv/bin/python -m pytest   (venv is gitignored;
+                  recreate with: python3 -m venv .venv && .venv/bin/pip install
+                  -r requirements-dev.txt)
 Routes (only 3):  GET /health, GET /api/metrics/dora, POST /api/ingest/sync
 Tables (only 3):  repositories, pull_requests, workflow_runs
-Host port clash:  compose publishes 5432, which collides with local Postgres 16.
-                  Quickstart fails on this machine without an override.
+Host port clash:  RESOLVED — compose now publishes 55432. Connect from the host
+                  with: psql -h localhost -p 55432 -U devpulse -d devpulse
 Secret hygiene:   CLEAN. backend/.env is gitignored, untracked, never in history.
 
 Test fixture:     the Docker volume devpulse_devpulse_pgdata still holds the
@@ -399,18 +420,12 @@ Keep this list current.
   See section 13b. They are now labelled CI-proxy derived in the README.
 - Missing data is rendered as 0.0 / "—" rather than "unavailable", violating
   PRD 2.6 and rules.md 11. No coverage or confidence model exists yet.
-- No commit SHA anywhere, so multi-system correlation is currently impossible.
-- No test harness: zero tests, pytest absent, and the CI job named
-  "backend-test" only runs an import check.
-- No Alembic migration tree despite alembic being a declared dependency;
-  schema is created by Base.metadata.create_all at startup.
+- Ingestion has no commit SHA capture yet, so correlation is still blocked.
 - Ingestion is capped at 3 pages x 50 items, with no incremental cursor, no
   rate-limit handling, no retry, and no error surfacing.
 - Runtime and incident integrations do not exist.
 - AI RCA is intentionally deferred (ADR-008, AGENTS.md 5).
 - Pipeline discovery is initially configuration-driven (ADR-009).
-- The entire MVP is unmerged on feat/github-ingestion-dora; main holds only
-  LICENSE and README.md.
 ```
 
 Remove items as they are genuinely solved.

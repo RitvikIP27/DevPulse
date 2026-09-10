@@ -60,6 +60,39 @@ PostgreSQL
 
 # 3. Backend Layers
 
+## Current structure (as of Stage 0.5, 2026-09-10)
+
+```text
+backend/
+├── alembic/                  schema migrations — the single owner of schema
+│   ├── env.py                URL injected from app settings, never from ini
+│   └── versions/
+│       └── 0001_baseline_schema.py
+├── alembic.ini
+├── entrypoint.sh             applies migrations, then starts uvicorn; fails fast
+├── pytest.ini
+├── requirements.txt          runtime dependencies
+├── requirements-dev.txt      test-only dependencies
+├── tests/
+│   ├── conftest.py
+│   ├── test_dora_metrics.py
+│   └── test_api.py
+└── app/
+    ├── main.py               lifespan; no create_all (ADR-015)
+    ├── api/                  routes_metrics.py, routes_ingest.py
+    ├── core/                 config.py, database.py, logging.py
+    ├── models/               events.py
+    ├── schemas/              metrics.py
+    └── services/             github_client.py, dora_metrics.py
+```
+
+The `services/` package is still flat and `github_client.py` still combines
+fetching, mapping and persistence. Splitting it into `connectors/` and
+`services/ingestion|normalization|correlation|analytics` happens as the stages
+that need those layers arrive, rather than as speculative scaffolding.
+
+## Target structure
+
 Recommended conceptual structure:
 
 ```text

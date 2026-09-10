@@ -624,3 +624,71 @@ manual validation
 ```
 
 provide sufficient confidence for that feature.
+
+---
+
+# 27. Implementation Status
+
+> Updated 2026-09-10 (Stage 0.5). Keep current as the suite grows.
+
+## What exists
+
+```text
+backend/pytest.ini            pytest configuration + custom markers
+backend/requirements-dev.txt  test-only dependencies, kept out of the runtime image
+backend/tests/conftest.py     fixtures: db_session, api_client, repository, runs
+backend/tests/test_dora_metrics.py   metric arithmetic + locked known defects
+backend/tests/test_api.py            HTTP contract tests
+```
+
+Current result: **17 passed, 3 xfailed**.
+
+## Database strategy
+
+Unit and API tests run against **in-memory SQLite**. The MVP models use only
+generic column types, so this is faithful and fast (section 2: cheapest reliable
+level first). Tables are created from `Base.metadata`, not by running migrations.
+
+This has a limit worth stating plainly: SQLite cannot represent everything a
+migration or a PostgreSQL-specific type can. So **migrations are verified
+separately against real PostgreSQL in CI** — applied to an empty database,
+downgraded to base, then checked for model/migration drift via autogenerate.
+
+When a feature depends on real PostgreSQL behaviour — JSON containment,
+concurrent upserts, constraint semantics — it needs an integration test against
+a live database (section 4), not a SQLite unit test.
+
+## Time in tests
+
+The metrics engine derives its look-back window from the wall clock. Test events
+are therefore positioned as offsets from a single `NOW` captured at import
+(`tests/conftest.py`), never as absolute timestamps, so the suite cannot drift
+out of its own window as real time passes.
+
+## The `known_defect` marker
+
+Per ADR-016, a defect proven by the audit is encoded as a test asserting the
+*required* behaviour, marked `xfail(strict=True)` with the fixing stage named in
+the reason.
+
+**When a stage fixes one of these, the test will fail.** That is the design.
+Remove the `xfail` and `known_defect` markers, keep the assertion, and update
+`memory.md`.
+
+Currently locked:
+
+```text
+test_a_ci_run_is_not_counted_as_a_production_deployment     -> Stage 5
+test_lead_time_measures_merge_to_production_deployment      -> Stage 7
+test_a_repository_with_no_data_reports_unavailable_not_zero -> Stage 6
+```
+
+## Not yet built
+
+```text
+connector tests (respx is installed and ready)
+integration tests against PostgreSQL
+frontend tests (Vitest / React Testing Library)
+E2E (Playwright)
+the devpulse-demo-pipeline synthetic repository
+```
