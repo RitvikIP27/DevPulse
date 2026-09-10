@@ -488,3 +488,81 @@ declines to repeat it in the meantime.
 The interface openly advertises how much of the product is unbuilt, including a
 `SOON` marker in the sidebar. That is the intended trade: an engineering
 audience trusts a tool that states its limits far more than one that hides them.
+
+---
+
+# ADR-018 — Naive UTC Storage with Conversion at the Provider Boundary
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 2
+
+## Context
+
+The MVP parsed timestamps with `strptime(value, "%Y-%m-%dT%H:%M:%SZ")`, which
+produced naive datetimes and raised outright on any offset form or fractional
+seconds a provider is entitled to return. Metric code then compared those naive
+values against `datetime.now(timezone.utc)`, mixing representations.
+
+## Decision
+
+Every external timestamp is parsed as timezone-aware, converted to UTC, and
+stored naive. One helper, `services/timestamps.parse_utc`, owns the conversion,
+and an unparseable value returns `None` rather than raising.
+
+## Why
+
+rules.md 4 requires a consistent database representation and forbids silently
+mixing local time with UTC. Naive-UTC satisfies both, provided the conversion
+happens in exactly one place — which is what makes it testable.
+
+`TIMESTAMP WITH TIME ZONE` would be stricter, but SQLAlchemy returns naive
+datetimes from SQLite regardless, so adopting it would force every
+database-touching test onto PostgreSQL. That cost is not justified while all
+timestamps originate from a single provider in UTC.
+
+## Migration path
+
+When a provider supplies genuine local-time semantics, move the columns to
+`timestamptz` and move the DB-backed tests onto PostgreSQL. The single
+conversion helper is the only code that changes.
+
+## Consequence
+
+A malformed timestamp skips one record with a warning rather than aborting a
+sync. Records missing a NOT NULL timestamp are skipped outright — inventing one
+would corrupt every duration derived from it.
+
+---
+
+# ADR-019 — Every Sync Records Its Outcome
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 2
+
+## Context
+
+`POST /api/ingest/sync` returned `200 {"status": "sync started"}` before doing
+any work. The audit injected an invalid token and watched the resulting
+`HTTPStatusError: 401` reach no log, no database row and no user.
+
+## Decision
+
+Ingestion writes a `SyncJob` row recording status, counts, and a classified
+error. The endpoint returns **202 Accepted**, and `GET /api/ingest/jobs` reports
+what actually happened.
+
+Status distinguishes `PARTIAL` from `FAILED`: a sync that wrote some records
+before failing leaves usable but incomplete data, and that difference decides
+whether the metrics built on it can be trusted.
+
+Errors are classified into the taxonomy from architecture.md 11 rather than
+flattened. A 403 carrying `x-ratelimit-remaining: 0` is a `RATE_LIMIT`, not an
+`AUTHORIZATION_ERROR` — misclassifying it sends someone to rotate a working
+token instead of waiting for the quota to reset.
+
+## Why
+
+PRD 2.6 requires DevPulse to report data coverage honestly. Coverage cannot be
+honest if the system does not know whether its own ingestion succeeded.

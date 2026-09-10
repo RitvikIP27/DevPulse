@@ -12,12 +12,14 @@ from app.models.events import PullRequest, Repository, WorkflowRun
 from app.schemas.repositories import (
     AnalysisConfidence,
     CoverageStatus,
+    LastSync,
     PipelineStage,
     RepositoryCoverage,
     RepositoryListResponse,
     RepositorySummary,
     StageCoverage,
 )
+from app.services.sync_jobs import latest_job_for_repository
 
 # Stages that a GitHub + GitHub Actions integration can populate today.
 # Everything else has no connector, so it is NOT_CONFIGURED rather than empty.
@@ -131,6 +133,30 @@ def list_repositories(db: Session) -> RepositoryListResponse:
             .scalar()
         )
 
+        correlatable = (
+            db.query(func.count(WorkflowRun.id))
+            .filter(WorkflowRun.repository_id == repository.id)
+            .filter(WorkflowRun.head_sha.isnot(None))
+            .scalar()
+            or 0
+        )
+        correlatable_run_pct = (
+            round(correlatable / workflow_run_count * 100, 1) if workflow_run_count else None
+        )
+
+        job = latest_job_for_repository(db, repository.id)
+        last_sync = (
+            LastSync(
+                status=job.status,
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+                error_code=job.error_code,
+                error_message=job.error_message,
+            )
+            if job
+            else None
+        )
+
         stages = _stage_coverage(pull_request_count, workflow_run_count)
         confidence, confidence_reason = _confidence(stages)
 
@@ -142,6 +168,8 @@ def list_repositories(db: Session) -> RepositoryListResponse:
                 pull_request_count=pull_request_count,
                 workflow_run_count=workflow_run_count,
                 last_activity_at=last_activity_at,
+                last_sync=last_sync,
+                correlatable_run_pct=correlatable_run_pct,
                 coverage=RepositoryCoverage(
                     stages=stages,
                     confidence=confidence,

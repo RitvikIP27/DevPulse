@@ -67,6 +67,14 @@ export interface RepositoryCoverage {
   confidence_reason: string;
 }
 
+export interface LastSync {
+  status: "RUNNING" | "SUCCESS" | "PARTIAL" | "FAILED";
+  started_at: string;
+  finished_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+}
+
 export interface RepositorySummary {
   id: number;
   full_name: string;
@@ -74,6 +82,8 @@ export interface RepositorySummary {
   pull_request_count: number;
   workflow_run_count: number;
   last_activity_at: string | null;
+  last_sync: LastSync | null;
+  correlatable_run_pct: number | null;
   coverage: RepositoryCoverage;
 }
 
@@ -88,4 +98,21 @@ export async function triggerSync(): Promise<void> {
   if (!response.ok) {
     throw new ApiError("Failed to start sync.", response.status);
   }
+}
+
+export interface SyncJob {
+  id: number;
+  repository_full_name: string | null;
+  provider: string;
+  status: "RUNNING" | "SUCCESS" | "PARTIAL" | "FAILED";
+  started_at: string;
+  finished_at: string | null;
+  pull_requests_written: number;
+  workflow_runs_written: number;
+  error_code: string | null;
+  error_message: string | null;
+}
+
+export function fetchSyncJobs(limit = 20): Promise<{ jobs: SyncJob[] }> {
+  return request<{ jobs: SyncJob[] }>(`/ingest/jobs?limit=${limit}`);
 }

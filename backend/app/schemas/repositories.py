@@ -58,6 +58,14 @@ class RepositoryCoverage(BaseModel):
     confidence_reason: str
 
 
+class LastSync(BaseModel):
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    error_code: str | None
+    error_message: str | None
+
+
 class RepositorySummary(BaseModel):
     id: int
     full_name: str
@@ -65,6 +73,10 @@ class RepositorySummary(BaseModel):
     pull_request_count: int
     workflow_run_count: int
     last_activity_at: datetime | None
+    last_sync: LastSync | None
+    # Share of ingested workflow runs that carry a commit SHA. Runs stored before
+    # correlation keys existed have none, and cannot be joined to anything.
+    correlatable_run_pct: float | None
     coverage: RepositoryCoverage
 
 

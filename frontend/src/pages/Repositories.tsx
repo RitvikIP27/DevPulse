@@ -4,7 +4,7 @@ import StatusBadge, { type BadgeTone } from "../components/ui/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/States";
 import {
   fetchRepositories, triggerSync,
-  type AnalysisConfidence, type CoverageStatus, type RepositorySummary,
+  type AnalysisConfidence, type CoverageStatus, type LastSync, type RepositorySummary,
 } from "../api/client";
 import { useAsync } from "../state/useAsync";
 import { formatRelativeDate } from "../format";
@@ -19,6 +19,13 @@ const STATUS_TONE: Record<CoverageStatus, BadgeTone> = {
   AVAILABLE: "success",
   NO_DATA: "warning",
   NOT_CONFIGURED: "neutral",
+};
+
+const SYNC_TONE: Record<LastSync["status"], BadgeTone> = {
+  SUCCESS: "success",
+  PARTIAL: "warning",
+  FAILED: "danger",
+  RUNNING: "info",
 };
 
 const STATUS_LABEL: Record<CoverageStatus, string> = {
@@ -36,6 +43,13 @@ function CoveragePanel({ repository }: { repository: RepositorySummary }) {
           {repository.coverage.confidence} confidence
         </StatusBadge>
       </div>
+
+      {repository.correlatable_run_pct !== null && (
+        <p className="coverage-detail" style={{ marginTop: 0, marginBottom: "var(--space-4)" }}>
+          {repository.correlatable_run_pct}% of workflow runs carry a commit SHA and can be
+          correlated to the change they shipped.
+        </p>
+      )}
 
       <div className="coverage-list">
         {repository.coverage.stages.map((stage) => (
@@ -119,6 +133,7 @@ export default function Repositories() {
                 <th>Pull requests</th>
                 <th>Workflow runs</th>
                 <th>Last activity</th>
+                <th>Last sync</th>
                 <th>Confidence</th>
                 <th />
               </tr>
@@ -136,6 +151,22 @@ export default function Repositories() {
                   <td className="data-table__numeric">{repository.pull_request_count}</td>
                   <td className="data-table__numeric">{repository.workflow_run_count}</td>
                   <td>{formatRelativeDate(repository.last_activity_at)}</td>
+                  <td>
+                    {repository.last_sync ? (
+                      <span title={repository.last_sync.error_message ?? undefined}>
+                        <StatusBadge tone={SYNC_TONE[repository.last_sync.status]}>
+                          {repository.last_sync.status}
+                        </StatusBadge>
+                        {repository.last_sync.error_code && (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                            {repository.last_sync.error_code}
+                          </div>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="data-table__unavailable">Never synced</span>
+                    )}
+                  </td>
                   <td>
                     <StatusBadge tone={CONFIDENCE_TONE[repository.coverage.confidence]}>
                       {repository.coverage.confidence}
