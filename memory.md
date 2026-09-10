@@ -292,36 +292,42 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   1 — Product Shell
+Stage:   2 — Ingestion correctness and correlation keys
 Status:  COMPLETE
 Date:    2026-09-10
-Branch:  feat/stage-1-product-shell
+Branch:  feat/stage-2-ingestion-correlation-keys
 
 Summary:
-  Turned the single-page dashboard into a nine-page application with the dark
-  design system from Design.md, and added the first real coverage reporting.
+  CORRELATION IS NOW POSSIBLE. Ingestion captures commit SHAs, and every sync
+  records what it actually did instead of failing silently.
 
 Implementation:
-  + GET /api/repositories — per-repository activity counts and per-stage data
-    coverage, computed from what was actually ingested (PRD 2.6)
-  + Coverage distinguishes AVAILABLE / NO_DATA / NOT_CONFIGURED, and derives
-    analysis confidence from how many of the 4 critical stages are visible
-  + Frontend: design tokens, AppShell + sidebar + topbar, react-router,
-    9 pages, shared filter context, central API client, useAsync hook
-  + Vitest + React Testing Library; 23 frontend tests
-  + Pages without an engine render a PLANNED state, never fake data (ADR-017)
+  + migration 0002: head_sha/head_branch/event/status/run_attempt/html_url on
+    workflow_runs; head_sha/merge_commit_sha/branches/author/closed_at/html_url
+    on pull_requests; sync_jobs table; unique (repository_id, github_pr_number)
+    with a dedupe step first, since the MVP upsert was racy
+  + services/timestamps.py — tz-aware parse -> naive UTC, one helper (fixes the
+    strptime that raised on any offset form)
+  + services/errors.py — provider error taxonomy (architecture.md 11);
+    403 + x-ratelimit-remaining:0 is RATE_LIMIT, not AUTHORIZATION_ERROR
+  + connector rewrite: Link-header pagination (was hard-capped at 3x50 and
+    silently truncating), bounded retries on rate-limit/5xx only, rate-limit
+    reserve, structured logging, SyncJob per repository
+  + GET /api/ingest/jobs; POST /api/ingest/sync now returns 202 not 200
+  + repositories endpoint gains last_sync + correlatable_run_pct
+  + UI: Last sync column, correlation readiness in the coverage panel
 
-Tests:   backend 26 passed / 3 xfailed; frontend 23 passed; alembic check clean
-Manual:  verified in a real browser at 1280px and 375px — data renders at a
-         90-day window (2.64/wk, 22.7% elevated), the 30-day window correctly
-         renders "—" everywhere, coverage drill-down shows SOURCE 21 / CI 90
-         with the other 8 stages Not configured, mobile collapses to a drawer
+Tests:   backend 55 passed / 3 xfailed (was 26); frontend 23 passed
+Manual:  live sync -> SUCCESS, 21 PRs + 90 runs, 4.2s, logged.
+         90/90 runs carry head_sha, 21/21 PRs carry merge_commit_sha, and PRs
+         JOIN to the runs that shipped them (PR #27 -> 10 linked runs).
+         correlatable_run_pct = 100%.
 
-PR:      #4
+PR:      #5
 
-Next:    Stage 2 — domain model (Service, Integration, Pipeline, Delivery,
-         DeliveryEvent). Capture commit SHA during ingestion first: it is the
-         join key everything downstream needs and nothing stores it yet.
+Next:    Stage 3/4 — normalized DeliveryEvent model, then correlate into
+         Delivery traces using merge_commit_sha = head_sha. The join is proven
+         to work on real data; the domain model is what is missing.
 ```
 
 ---
@@ -354,8 +360,8 @@ Run tests:        backend  — cd backend && ./.venv/bin/python -m pytest
                   frontend — cd frontend && npm test
 Demo note:        ingested data spans 2026-05-29..2026-07-19, so the default
                   30-day window shows "—". Select 90 days to see real numbers.
-Routes:           GET /health, GET /api/metrics/dora, POST /api/ingest/sync,
-                  GET /api/repositories
+Routes:           GET /health, GET /api/metrics/dora, GET /api/repositories,
+                  POST /api/ingest/sync (202), GET /api/ingest/jobs
 Tables (only 3):  repositories, pull_requests, workflow_runs
 Host port clash:  RESOLVED — compose now publishes 55432. Connect from the host
                   with: psql -h localhost -p 55432 -U devpulse -d devpulse
@@ -419,9 +425,8 @@ Keep this list current.
   See section 13b. They are now labelled CI-proxy derived in the README.
 - Missing data is rendered as 0.0 / "—" rather than "unavailable", violating
   PRD 2.6 and rules.md 11. No coverage or confidence model exists yet.
-- Ingestion has no commit SHA capture yet, so correlation is still blocked.
-- Ingestion is capped at 3 pages x 50 items, with no incremental cursor, no
-  rate-limit handling, no retry, and no error surfacing.
+- Ingestion has no incremental cursor yet: every sync refetches the window and
+  stops at a 10-page ceiling.
 - Runtime and incident integrations do not exist.
 - AI RCA is intentionally deferred (ADR-008, AGENTS.md 5).
 - Pipeline discovery is initially configuration-driven (ADR-009).
