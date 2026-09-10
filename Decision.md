@@ -440,3 +440,51 @@ acknowledged. A defect cannot be silently fixed or silently reintroduced.
 
 This is how PRD section 5's ground-truth expectations enter the codebase before
 the engine capable of satisfying them exists.
+
+---
+
+# ADR-017 — Unbuilt Capabilities Render as Planned, Never as Empty or Zero
+
+**Status:** Accepted
+**Date:** 2026-09-10
+**Stage:** 1
+
+## Context
+
+The product shell introduces nine pages, but only three have an engine behind
+them. Deliveries, Bottlenecks, Health and Analysis have no backing data at all.
+
+The conventional move is to fill them with placeholder charts and sample
+numbers so the product demos well.
+
+## Decision
+
+Pages without an engine render an explicit *planned* state naming the stage that
+will build them and what must exist first. They show no numbers whatsoever.
+
+Three display states are kept distinct throughout the UI:
+
+```text
+empty          the query ran and found nothing
+unavailable    the metric cannot be computed from the data present
+planned        DevPulse cannot answer this question yet
+```
+
+## Why
+
+Placeholder data is indistinguishable from real data to anyone looking at the
+screen, which is exactly the failure rules.md 11 and AGENTS.md 12 forbid. A
+product whose entire thesis is *evidence before inference* cannot ship a
+dashboard of invented numbers.
+
+The same rule governs real metrics. A window containing no completed workflow
+runs renders `—`, not `0.0%` — because a zero failure rate reads as a healthy
+service, and the audit showed an empty repository sorting as the best performer.
+The backend still returns `0.0` here; correcting that is Stage 6, and the UI
+declines to repeat it in the meantime.
+
+## Consequence
+
+The interface openly advertises how much of the product is unbuilt, including a
+`SOON` marker in the sidebar. That is the intended trade: an engineering
+audience trusts a tool that states its limits far more than one that hides them.

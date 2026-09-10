@@ -1,0 +1,61 @@
+/* DevPulse design tokens — the single source of visual truth (Design.md 2-6).
+   Components must reference these variables and never hard-code a colour. */
+
+:root {
+  /* Surfaces */
+  --bg-primary: #080b10;
+  --bg-secondary: #0d1117;
+  --bg-tertiary: #121821;
+  --surface: #151b24;
+  --surface-elevated: #1a2230;
+
+  --border: #273140;
+  --border-subtle: #1d2530;
+
+  /* Text */
+  --text-primary: #f3f6fa;
+  --text-secondary: #a8b3c2;
+  --text-muted: #6f7b8c;
+
+  /* Accent — used sparingly so important information keeps visual priority */
+  --accent: #6ee7ff;
+  --accent-soft: #16323b;
+
+  /* Status */
+  --success: #4ade80;
+  --warning: #facc15;
+  --danger: #fb7185;
+  --info: #60a5fa;
+
+  /* Status backgrounds, for badges and banners */
+  --success-soft: #10251a;
+  --warning-soft: #2a2410;
+  --danger-soft: #2b1620;
+  --info-soft: #111d30;
+  --neutral-soft: #1a212b;
+
+  /* Spacing scale (Design.md 4) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius (Design.md 5) */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  /* Type */
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Layout */
+  --sidebar-width: 248px;
+  --content-max-width: 1440px;
+}
