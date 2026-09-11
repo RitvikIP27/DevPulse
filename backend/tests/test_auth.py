@@ -178,8 +178,38 @@ class TestRouteProtection:
             "/api/repositories", "/api/metrics/dora", "/api/deliveries",
             "/api/bottlenecks", "/api/conflicts", "/api/anomalies",
             "/api/health-score", "/api/analysis/candidates",
+            "/api/ingest/jobs", "/api/webhooks/events",
         ):
             assert api_client.get(path).status_code == 401, path
+
+    def test_every_protected_get_route_is_covered_by_the_check_above(self):
+        """Guards the guard: if a new GET route is added to a protected router,
+        this fails until it is added to the assertion list. Without it the test
+        above would quietly stop covering the whole surface."""
+        from app.main import app
+        from app.core.dependencies import current_user
+
+        protected_gets = {
+            route.path
+            for route in app.routes
+            if getattr(route, "path", "").startswith("/api")
+            and "GET" in getattr(route, "methods", set())
+            and any(
+                getattr(d, "dependency", None) is current_user
+                for d in getattr(route, "dependencies", [])
+            )
+            and "{" not in route.path  # path-parameter routes need real ids
+        }
+        asserted = {
+            "/api/repositories", "/api/metrics/dora", "/api/deliveries",
+            "/api/bottlenecks", "/api/conflicts", "/api/anomalies",
+            "/api/health-score", "/api/analysis/candidates",
+            "/api/ingest/jobs", "/api/webhooks/events",
+        }
+        assert protected_gets == asserted, (
+            "A protected GET route is not covered by the anonymous-access test: "
+            f"{protected_gets ^ asserted}"
+        )
 
     def test_a_valid_token_is_accepted(self, api_client, auth_enabled, existing_user):
         token = create_access_token(existing_user.id)
