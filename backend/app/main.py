@@ -8,6 +8,7 @@ from app.api import (
     routes_anomalies,
     routes_bottlenecks,
     routes_conflicts,
+    routes_health_score,
     routes_deliveries,
     routes_ingest,
     routes_metrics,
@@ -46,6 +47,7 @@ app.include_router(routes_bottlenecks.router)
 app.include_router(routes_conflicts.router)
 app.include_router(routes_analysis.router)
 app.include_router(routes_anomalies.router)
+app.include_router(routes_health_score.router)
 
 
 @app.get("/health")

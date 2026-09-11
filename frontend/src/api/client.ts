@@ -480,3 +480,42 @@ export async function acknowledgeAnomaly(id: number): Promise<void> {
     throw new ApiError("Could not acknowledge the anomaly.", response.status);
   }
 }
+
+/* ------------------------------ Health score ----------------------------- */
+
+export type HealthDimensionName =
+  | "DELIVERY" | "STABILITY" | "PIPELINE" | "RUNTIME" | "OBSERVABILITY";
+
+export interface DimensionInput {
+  label: string;
+  value: number | null;
+  unit: string | null;
+  points: number | null;
+  max_points: number;
+  explanation: string;
+}
+
+export interface DimensionScore {
+  dimension: HealthDimensionName;
+  score: number | null;
+  coverage_pct: number;
+  unavailable_reason: string | null;
+  inputs: DimensionInput[];
+}
+
+export interface ServiceHealth {
+  service: string;
+  repository_full_name: string;
+  overall_score: number | null;
+  dimensions_scored: number;
+  dimensions_total: number;
+  unavailable_reason: string | null;
+  dimensions: DimensionScore[];
+}
+
+export function fetchHealthScore(windowDays = 30): Promise<{
+  window_days: number;
+  services: ServiceHealth[];
+}> {
+  return request(`/health-score?window_days=${windowDays}`);
+}

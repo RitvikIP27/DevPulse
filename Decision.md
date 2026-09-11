@@ -910,3 +910,50 @@ detection twice leaves one row.
 On the audited repository the engine reports CI duration moving from 3.25m to
 11.5m (+253.8%, HIGH) — the same figure the bottleneck engine independently
 reports, which is the intended consequence of sharing one statistics module.
+
+---
+
+# ADR-026 — Health Score Averages Only What It Can Measure
+
+**Status:** Accepted
+**Date:** 2026-09-11
+**Stage:** 18
+
+## Context
+
+A composite score is the easiest number in the product to get wrong. Roll up
+five dimensions naively and a team with no monitoring connected is punished for
+DevPulse's blind spot; treat missing data as zero and an empty repository looks
+broken rather than unknown.
+
+## Decision
+
+Five dimensions — DELIVERY, STABILITY, PIPELINE, RUNTIME, OBSERVABILITY — each
+the mean of named, bounded inputs. Every input carries the measurement it came
+from and a sentence stating how it became points, and the UI renders that
+breakdown beneath the score.
+
+- A dimension with no measurable input scores **null**, not zero, with a reason.
+- The overall figure is the mean of **scorable dimensions only**.
+- Thresholds are named constants, not inline numbers, so the rubric is visible
+  and arguable (rules.md 3).
+- Banding is linear between thresholds rather than a step, so a service just
+  outside "good" does not look identical to one far outside it.
+
+OBSERVABILITY deliberately scores **DevPulse's own visibility**, not the team's
+performance, and its input says so. It is the one dimension that is always
+measurable, which is why a bare repository still receives a low score rather
+than no score — low because little is visible, which is the honest reading.
+
+## Why decomposable
+
+PRD constraint 9 requires it. The practical reason is that a composite nobody
+can take apart gets argued with rather than acted on: an engineer shown "68" asks
+"why?", and a page that cannot answer loses the argument.
+
+## Verified
+
+On real data: the repository with CI failing and regressing scores PIPELINE 4.5
+while its DELIVERY is 59.4 — the composite does not hide a bad dimension behind
+good ones. The demo service scores RUNTIME 50.0, exactly one of its two
+deployments being conflict-free.
