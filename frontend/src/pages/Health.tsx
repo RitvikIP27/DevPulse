@@ -2,8 +2,11 @@ import PageHeader from "../components/ui/PageHeader";
 import Banner from "../components/ui/Banner";
 import StatusBadge from "../components/ui/StatusBadge";
 import MetricCard from "../components/ui/MetricCard";
-import { EmptyState, ErrorState, LoadingState, NotYetAvailable } from "../components/ui/States";
-import { fetchConflicts, type Conflict, type DeploymentConflictReport } from "../api/client";
+import { EmptyState, ErrorState, LoadingState } from "../components/ui/States";
+import {
+  fetchConflicts, fetchHealthScore,
+  type Conflict, type DeploymentConflictReport, type DimensionScore, type ServiceHealth,
+} from "../api/client";
 import { useAsync } from "../state/useAsync";
 import { useFilters } from "../state/FilterContext";
 
@@ -116,6 +119,95 @@ function ReportCard({ report }: { report: DeploymentConflictReport }) {
   );
 }
 
+function scoreTone(score: number | null) {
+  if (score === null) return "neutral" as const;
+  if (score >= 75) return "success" as const;
+  if (score >= 50) return "warning" as const;
+  return "danger" as const;
+}
+
+function DimensionCard({ dimension }: { dimension: DimensionScore }) {
+  return (
+    <div className="card" style={{ marginBottom: "var(--space-4)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <strong style={{ fontSize: 13, letterSpacing: "0.04em" }}>{dimension.dimension}</strong>
+          <StatusBadge tone={scoreTone(dimension.score)}>
+            {dimension.score === null ? "Not measurable" : `${dimension.score} / 100`}
+          </StatusBadge>
+        </div>
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          {dimension.coverage_pct}% of inputs measurable
+        </span>
+      </div>
+
+      {dimension.unavailable_reason && (
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 10 }}>
+          {dimension.unavailable_reason}
+        </p>
+      )}
+
+      {dimension.inputs.map((input) => (
+        <div key={input.label} className="component-row" style={{ gridTemplateColumns: "200px 1fr 96px" }}>
+          <span className="component-row__name">
+            {input.label}
+            {input.value !== null && (
+              <span className="component-row__weight"> · {input.value}{input.unit ?? ""}</span>
+            )}
+          </span>
+          <span className="component-row__track">
+            <span
+              className="component-row__fill"
+              style={{
+                width: `${input.points ?? 0}%`,
+                background: input.points === null ? "var(--border)" : undefined,
+              }}
+            />
+          </span>
+          <span className="component-row__value">
+            {input.points === null ? "—" : `${input.points}`}
+          </span>
+          <p className="component-row__explanation">{input.explanation}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HealthScoreSection({ windowDays }: { windowDays: number }) {
+  const { state, reload } = useAsync(() => fetchHealthScore(windowDays), [windowDays]);
+
+  if (state.status === "loading") return <LoadingState label="Scoring engineering health" />;
+  if (state.status === "error") return <ErrorState error={state.error} onRetry={reload} />;
+  if (state.data.services.length === 0) {
+    return <EmptyState title="No services tracked" body="Add a repository to score its health." />;
+  }
+
+  return (
+    <>
+      {state.data.services.map((service: ServiceHealth) => (
+        <div key={service.repository_full_name} style={{ marginBottom: "var(--space-8)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: "var(--space-4)", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0, fontSize: 16 }}>{service.service}</h3>
+            <div className="score-hero" style={{ margin: 0 }}>
+              <span className="score-hero__value" style={{ fontSize: 32 }}>
+                {service.overall_score ?? "—"}
+              </span>
+              <span className="score-hero__max">/ 100 overall</span>
+            </div>
+            <StatusBadge tone="neutral">
+              {service.dimensions_scored} of {service.dimensions_total} dimensions scored
+            </StatusBadge>
+          </div>
+          {service.dimensions.map((dimension) => (
+            <DimensionCard key={dimension.dimension} dimension={dimension} />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function Health() {
   const { windowDays } = useFilters();
   const { state, reload } = useAsync(() => fetchConflicts(windowDays), [windowDays]);
@@ -186,11 +278,13 @@ export default function Health() {
 
           <section className="section">
             <h2 className="section__title">Composite health score</h2>
-            <NotYetAvailable
-              title="Engineering health scoring is not available yet"
-              body="A composite score is only meaningful if every dimension can be explained from an underlying measurement. Delivery and reliability dimensions exist, but observability and runtime scoring need sustained runtime data first."
-              stage="Stage 18"
-            />
+            <p className="section__hint">
+              Five dimensions, each the mean of named bounded inputs shown below it.
+              A dimension with no measurable input scores nothing rather than zero,
+              and the overall figure averages only the dimensions that could be
+              scored — a team is not marked down for DevPulse's blind spots.
+            </p>
+            <HealthScoreSection windowDays={windowDays} />
           </section>
         </>
       )}

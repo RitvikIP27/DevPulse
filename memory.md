@@ -292,32 +292,30 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   10 — Anomaly engine
+Stage:   18 — Composite health score
 Status:  COMPLETE
 Date:    2026-09-11
-Branch:  feat/stage-10-anomaly-engine
-
-Summary:
-  "What changed recently?" — distinct from bottlenecks' "where does time go?".
+Branch:  feat/stage-18-health-score
 
 Implementation:
-  + migration 0006: anomalies table (persisted, acknowledgeable)
-  + services/anomalies.py — reuses services/baselines.py (ONE definition of
-    median/baseline/regression for the whole product)
-  + GET /api/anomalies, POST /api/anomalies/{id}/acknowledge
-  + AnomalyList component rendered on the Bottlenecks page
+  + services/health.py — 5 dimensions (DELIVERY/STABILITY/PIPELINE/RUNTIME/
+    OBSERVABILITY), each the mean of named bounded inputs
+  + GET /api/health-score
+  + Health page: replaces the Stage-18 placeholder with real scores + breakdown
 
-  ADR-025 conservatism: <25% = normal variation; <5 baseline samples = no claim;
-  IMPROVEMENTS ARE NEVER ANOMALIES; severity banded on magnitude.
+  ADR-026: unmeasurable dimension = null NOT zero; overall = mean of SCORABLE
+  dimensions only (never punish a team for DevPulse's blind spots); thresholds
+  are named constants; OBSERVABILITY scores DevPulse's visibility, not the team.
 
-  Idempotence bug found by test: window_start came from utc_now() to the
-  microsecond, so every run inserted a duplicate. Truncated to the hour.
+VERIFIED live (90d):
+  DevPulse            0.0  (1/5 scored — no data at all)
+  KubernesDeployment 37.0  (4/5) PIPELINE 4.5  <- matches the CI anomaly
+  payments-api (demo)63.3  (4/5) RUNTIME 50.0  <- exactly 1 of 2 deploys clean
 
-VERIFIED live: CI duration 3.25m -> 11.5m (+253.8%, HIGH) — the SAME figure the
-bottleneck engine reports, which is the point of sharing one stats module.
+Tests:   backend 162 passed; frontend 24 passed
+PR:      #14
 
-Tests:   backend 148 passed; frontend 24 passed
-PR:      #13
+NOTE: NO placeholder pages remain anywhere in the product.
 ```
 
 ---
