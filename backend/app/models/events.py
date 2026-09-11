@@ -24,6 +24,11 @@ class Repository(Base):
     full_name = Column(String, unique=True, index=True, nullable=False)  # owner/repo
     display_name = Column(String, nullable=True)  # e.g. "payments-service"
 
+    #: High-water mark of the last successful sync. Ingestion asks the provider
+    #: only for records updated since this point instead of refetching the whole
+    #: window, which is what makes frequent syncing affordable.
+    last_synced_at = Column(DateTime, nullable=True)
+
     pull_requests = relationship("PullRequest", back_populates="repository")
     workflow_runs = relationship("WorkflowRun", back_populates="repository")
     sync_jobs = relationship("SyncJob", back_populates="repository")
@@ -302,6 +307,33 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
+
+
+class WebhookEvent(Base):
+    """A raw webhook delivery, recorded before it is processed.
+
+    Stored first and processed second for two reasons: GitHub expects a fast
+    response and will retry on timeout, and a delivery that fails to process
+    can be inspected and replayed instead of being lost. ``delivery_id`` is
+    unique so a retried delivery is recognised rather than double-counted.
+    """
+
+    __tablename__ = "webhook_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "delivery_id", name="uq_webhook_delivery"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String, nullable=False)       # "github"
+    delivery_id = Column(String, nullable=False)    # provider's delivery GUID
+    event_type = Column(String, nullable=False)     # push / pull_request / ...
+    repository_full_name = Column(String, nullable=True)
+
+    received_at = Column(DateTime, nullable=False)
+    processed_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False)         # RECEIVED / PROCESSED / IGNORED / FAILED
+    detail = Column(Text, nullable=True)
+    payload_json = Column(Text, nullable=False)
 
 
 class SyncJob(Base):
