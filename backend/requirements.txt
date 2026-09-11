@@ -8,4 +8,5 @@ python-dotenv==1.0.1
 pydantic==2.9.2
 pydantic-settings==2.5.2
 python-jose[cryptography]==3.3.0
+bcrypt==4.2.1           # password hashing; deliberately slow by design
 anthropic==1.4.0        # optional AI layer; imported lazily so its absence never breaks the API

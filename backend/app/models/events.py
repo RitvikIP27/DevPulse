@@ -285,6 +285,25 @@ class Anomaly(Base):
     repository = relationship("Repository")
 
 
+class User(Base):
+    """A person who can sign in to DevPulse.
+
+    Passwords are never stored. ``password_hash`` holds a bcrypt digest, which
+    is deliberately slow to compute: that slowness is the defence, because it
+    makes guessing billions of candidates against a stolen database impractical.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False)
+    last_login_at = Column(DateTime, nullable=True)
+
+
 class SyncJob(Base):
     """The outcome of one ingestion run.
 

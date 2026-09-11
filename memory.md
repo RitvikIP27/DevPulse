@@ -292,30 +292,37 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   18 — Composite health score
+Stage:   23 — Authentication and security hardening
 Status:  COMPLETE
 Date:    2026-09-11
-Branch:  feat/stage-18-health-score
+Branch:  feat/stage-23-auth-hardening
 
 Implementation:
-  + services/health.py — 5 dimensions (DELIVERY/STABILITY/PIPELINE/RUNTIME/
-    OBSERVABILITY), each the mean of named bounded inputs
-  + GET /api/health-score
-  + Health page: replaces the Stage-18 placeholder with real scores + breakdown
+  + migration 0007: users (bcrypt password_hash, is_active)
+  + core/security.py — bcrypt hashing + JWT issue/verify
+  + core/dependencies.py — current_user, fails closed
+  + routes_auth.py — /status (public), /register, /login, /me
+  + ALL data routers included with dependencies=[Depends(current_user)]
+  + frontend: AuthContext, Login page, token in localStorage, sign-out
+  + CORS origins now configurable (was hard-coded "*")
 
-  ADR-026: unmeasurable dimension = null NOT zero; overall = mean of SCORABLE
-  dimensions only (never punish a team for DevPulse's blind spots); thresholds
-  are named constants; OBSERVABILITY scores DevPulse's visibility, not the team.
+  ADR-027: AUTH_ENABLED opt-in (default off for local use); router-level
+  enforcement so a NEW ROUTE IS PROTECTED BY DEFAULT; identical message for
+  unknown-email vs wrong-password (prevents enumeration); >72-byte passwords
+  REJECTED not truncated; JWT carries only sub/exp/iat.
 
-VERIFIED live (90d):
-  DevPulse            0.0  (1/5 scored — no data at all)
-  KubernesDeployment 37.0  (4/5) PIPELINE 4.5  <- matches the CI anomaly
-  payments-api (demo)63.3  (4/5) RUNTIME 50.0  <- exactly 1 of 2 deploys clean
+  Removed pydantic EmailStr: it rejects admin@devpulse.local (.local is on a
+  hard-coded special-use list). Syntax checked directly; one less dependency.
 
-Tests:   backend 162 passed; frontend 24 passed
-PR:      #14
+VERIFIED LIVE (9 checks): anon 401 / status public / bootstrap register /
+  authed 200 / register closes 403 / one message on bad creds / login 200 /
+  /health public / forged token 401.
 
-NOTE: NO placeholder pages remain anywhere in the product.
+Tests:   backend 201 passed; frontend 29 passed
+PR:      #15
+
+NOTE: backend/.env now has AUTH_ENABLED=true and an owner account
+      ritvik@devpulse.local. Set AUTH_ENABLED=false to bypass login locally.
 ```
 
 ---

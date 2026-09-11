@@ -1,6 +1,31 @@
 /** Central API client. Every network call goes through here (rules.md 14). */
 
 const BASE = "/api";
+const TOKEN_KEY = "devpulse.token";
+
+/** The token lives in localStorage so a refresh does not sign the user out. */
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string | null): void {
+  try {
+    if (token === null) localStorage.removeItem(TOKEN_KEY);
+    else localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // Private browsing can deny storage. The session still works; it just will
+    // not survive a reload, which is better than failing to sign in at all.
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -12,11 +37,17 @@ export class ApiError extends Error {
 async function request<T>(path: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${BASE}${path}`);
+    response = await fetch(`${BASE}${path}`, { headers: authHeaders() });
   } catch {
     // fetch only rejects on network-level failure, which for this app almost
     // always means the API container is not running.
     throw new ApiError("Could not reach the DevPulse API.", 0);
+  }
+  if (response.status === 401) {
+    // The token is gone or expired. Clearing it makes the shell fall back to
+    // the login screen instead of looping on failed requests.
+    setToken(null);
+    throw new ApiError("Your session has expired. Please sign in again.", 401);
   }
   if (!response.ok) {
     throw new ApiError(`Request to ${path} failed.`, response.status);
@@ -99,7 +130,7 @@ export function fetchRepositories(): Promise<{ repositories: RepositorySummary[]
 /* --------------------------------- Ingest -------------------------------- */
 
 export async function triggerSync(): Promise<void> {
-  const response = await fetch(`${BASE}/ingest/sync`, { method: "POST" });
+  const response = await fetch(`${BASE}/ingest/sync`, { method: "POST", headers: authHeaders() });
   if (!response.ok) {
     throw new ApiError("Failed to start sync.", response.status);
   }
@@ -210,7 +241,7 @@ export async function createDeploymentRule(
 ): Promise<DeploymentRuleList> {
   const response = await fetch(`${BASE}/repositories/${repositoryId}/deployment-rules`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({
       workflow_name_pattern: workflowNamePattern,
       environment,
@@ -231,6 +262,7 @@ export async function createDeploymentRule(
 export async function deleteDeploymentRule(repositoryId: number, ruleId: number): Promise<void> {
   const response = await fetch(`${BASE}/repositories/${repositoryId}/deployment-rules/${ruleId}`, {
     method: "DELETE",
+    headers: authHeaders(),
   });
   if (!response.ok) {
     throw new ApiError("Could not remove the deployment rule.", response.status);
@@ -435,6 +467,7 @@ export function fetchEvidence(deploymentId: number): Promise<EvidencePackage> {
 export async function requestRca(deploymentId: number, force = false): Promise<RcaResponse> {
   const response = await fetch(`${BASE}/analysis/rca/${deploymentId}?force=${force}`, {
     method: "POST",
+    headers: authHeaders(),
   });
   if (!response.ok) {
     throw new ApiError("Could not run the analysis.", response.status);
@@ -475,7 +508,9 @@ export function fetchAnomalies(windowDays = 7): Promise<AnomalyListResponse> {
 }
 
 export async function acknowledgeAnomaly(id: number): Promise<void> {
-  const response = await fetch(`${BASE}/anomalies/${id}/acknowledge`, { method: "POST" });
+  const response = await fetch(`${BASE}/anomalies/${id}/acknowledge`, {
+    method: "POST", headers: authHeaders(),
+  });
   if (!response.ok) {
     throw new ApiError("Could not acknowledge the anomaly.", response.status);
   }
@@ -518,4 +553,56 @@ export function fetchHealthScore(windowDays = 30): Promise<{
   services: ServiceHealth[];
 }> {
   return request(`/health-score?window_days=${windowDays}`);
+}
+
+/* ----------------------------- Authentication ---------------------------- */
+
+export interface AuthStatus {
+  auth_required: boolean;
+  has_users: boolean;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in_minutes: number;
+}
+
+export function fetchAuthStatus(): Promise<AuthStatus> {
+  return request<AuthStatus>("/auth/status");
+}
+
+async function submitCredentials(
+  path: "login" | "register",
+  email: string,
+  password: string
+): Promise<TokenResponse> {
+  const response = await fetch(`${BASE}/auth/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    let detail = path === "login" ? "Incorrect email or password." : "Could not create the account.";
+    try {
+      const body = await response.json();
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      // A non-JSON error body is not worth surfacing raw.
+    }
+    throw new ApiError(detail, response.status);
+  }
+  const token = (await response.json()) as TokenResponse;
+  setToken(token.access_token);
+  return token;
+}
+
+export const login = (email: string, password: string) =>
+  submitCredentials("login", email, password);
+
+export const register = (email: string, password: string) =>
+  submitCredentials("register", email, password);
+
+export function logout(): void {
+  setToken(null);
 }

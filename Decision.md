@@ -957,3 +957,74 @@ On real data: the repository with CI failing and regressing scores PIPELINE 4.5
 while its DELIVERY is 59.4 — the composite does not hide a bad dimension behind
 good ones. The demo service scores RUNTIME 50.0, exactly one of its two
 deployments being conflict-free.
+
+---
+
+# ADR-027 — Authentication Is Opt-In, Enforced at the Router, and Fails Closed
+
+**Status:** Accepted
+**Date:** 2026-09-11
+**Stage:** 23
+
+## Context
+
+Until now DevPulse had no authentication and `allow_origins=["*"]`. That is fine
+on a laptop and unacceptable anywhere else — it was the last genuine production
+blocker.
+
+## Decision
+
+**Opt-in via `AUTH_ENABLED`, default off.** A local single-user install should
+not be forced through a login it does not need, and a tool that demands a
+password before showing anything gets abandoned during evaluation. Turning it on
+is one environment variable, and it must be on before exposing DevPulse beyond
+localhost.
+
+**Enforced at the router, not per handler.** Every data router is included with
+`dependencies=[Depends(current_user)]`. Per-handler dependencies are how auth
+holes appear: someone adds an endpoint and forgets the decorator. Declaring it
+once means a new route is protected *by default* and would have to be
+deliberately excluded. A test walks eight endpoints and asserts 401 on each.
+
+**Fails closed.** A token that is expired, tampered with, signed by another key,
+or belongs to a deleted or deactivated user is rejected identically. Checking the
+signature alone would keep honouring a token for an account that no longer
+exists, so the user is re-loaded and re-checked on every request.
+
+## Password handling
+
+bcrypt, with a per-hash random salt so two users sharing a password do not share
+a digest. bcrypt is *deliberately slow*, and that slowness is the entire defence
+— a fast hash like SHA-256 is the wrong tool precisely because it is fast.
+
+Passwords over 72 bytes are **rejected rather than truncated**: bcrypt silently
+ignores the excess, so accepting would quietly weaken a password the user
+believes is long.
+
+## Deliberate information hygiene
+
+- Login returns one message for every failure. Distinguishing "no such account"
+  from "wrong password" lets anyone enumerate which emails are registered.
+- The JWT carries only `sub`, `exp`, `iat`. A JWT is **signed, not encrypted** —
+  anyone can read it — so it must never carry a secret. A test asserts the claim
+  set is exactly those three.
+- Registration is open only while no account exists, so a fresh install can
+  bootstrap its owner. An always-open endpoint that mints accounts would make
+  authentication pointless.
+
+## Email validation
+
+`EmailStr` was removed. The library behind it rejects `admin@devpulse.local`
+outright, because `.local` sits on a hard-coded special-use list with no flag to
+bypass. DevPulse is self-hosted and routinely runs on internal domains, and
+refusing a valid internal address at sign-up is a worse failure than accepting
+one that happens to be undeliverable. Syntax is now checked directly, which also
+removes a dependency (rules.md 16). Whether mail can be delivered is a
+mail-server concern, not a sign-up concern.
+
+## Verified live
+
+Nine behaviours against the running stack: anonymous 401, public status,
+bootstrap registration, authenticated 200, registration closing with 403, a
+single message on bad credentials, successful login, `/health` staying public
+for liveness probes, and a forged token rejected.
