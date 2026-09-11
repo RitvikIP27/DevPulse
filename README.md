@@ -199,8 +199,14 @@ server starts. `create_all` is never used.
 
 ## Documentation
 
+**New to the project? Start with
+[`docs/explain/`](docs/explain/README.md)** — a fourteen-chapter walkthrough that
+assumes no web development knowledge and covers every file and concept in the
+codebase.
+
 | Document | Purpose |
 |---|---|
+| [docs/explain/](docs/explain/README.md) | **Learn the whole project from scratch** |
 | [PRD.md](PRD.md) | Product requirements and roadmap |
 | [architecture.md](architecture.md) | Technical architecture |
 | [Decision.md](Decision.md) | Architecture decision records (ADR-001 → 020) |

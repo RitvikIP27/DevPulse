@@ -706,3 +706,28 @@ frontend tests (Vitest / React Testing Library)
 E2E (Playwright)
 the devpulse-demo-pipeline synthetic repository
 ```
+
+---
+
+# 28. Guarding the Guards
+
+Some tests exist to stop *other tests* silently losing coverage.
+
+`test_every_protected_get_route_is_covered_by_the_check_above` enumerates every
+GET route registered with the `current_user` dependency and asserts that set
+equals the list the anonymous-access test walks. Add a protected route without
+adding it to that list and this fails, naming the route.
+
+Without it, the anonymous-access test would keep passing while covering a
+shrinking share of the API — the most dangerous kind of green.
+
+The same principle already applies elsewhere:
+
+- CI's **model-drift check** guards the migrations. It was itself verified
+  against a synthetic drift file, to confirm the grep actually catches
+  operations rather than always passing.
+- The `isolated_settings` fixture guards every test against ambient
+  configuration, after five tests were found passing in CI and failing locally.
+
+**When you write a check, ask what would happen if it silently stopped
+checking.** If the answer is "nothing visible", it needs a guard of its own.
