@@ -14,6 +14,7 @@ from app.api import (
     routes_ingest,
     routes_metrics,
     routes_repositories,
+    routes_webhooks,
 )
 from app.core.config import settings
 from app.core.dependencies import current_user
@@ -49,6 +50,10 @@ app.add_middleware(
 # have one, and the UI needs /status to know whether to show a login screen.
 app.include_router(routes_auth.router)
 
+# The webhook receiver is public because GitHub cannot present a bearer token.
+# Its HMAC signature is the authentication, verified against the raw body.
+app.include_router(routes_webhooks.public_router)
+
 # Every data route is protected at the ROUTER level rather than per handler.
 # Per-handler dependencies are the classic way an auth hole appears: someone
 # adds an endpoint and forgets the decorator. Declaring it once here means a new
@@ -64,6 +69,7 @@ for _router in (
     routes_analysis.router,
     routes_anomalies.router,
     routes_health_score.router,
+    routes_webhooks.router,
 ):
     app.include_router(_router, dependencies=[_protected])
 

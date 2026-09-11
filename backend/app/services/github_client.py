@@ -138,8 +138,15 @@ def get_or_create_repository(db: Session, full_name: str) -> Repository:
 
 
 def sync_pull_requests(db: Session, repo: Repository, client: httpx.Client) -> int:
-    """Upsert pull requests. Returns the number of rows written."""
+    """Upsert pull requests. Returns the number of rows written.
+
+    Incremental: results come back newest-updated first, so once a record older
+    than the last successful sync appears, everything after it is older still
+    and fetching stops. A full refetch of the window on every sync was affordable
+    at three pages and is not at a hundred.
+    """
     written = 0
+    cursor = repo.last_synced_at
 
     for pr in _paginate(
         client,
@@ -147,6 +154,15 @@ def sync_pull_requests(db: Session, repo: Repository, client: httpx.Client) -> i
         {"state": "all", "sort": "updated", "direction": "desc"},
         lambda payload: payload,
     ):
+        if cursor is not None:
+            updated_at = parse_utc(pr.get("updated_at"))
+            if updated_at is not None and updated_at <= cursor:
+                logger.info(
+                    "pull request sync reached the cursor for %s; stopping early",
+                    repo.full_name,
+                )
+                break
+
         opened_at = parse_utc(pr.get("created_at"))
         if opened_at is None:
             # opened_at is NOT NULL; a record without it cannot be stored, and
@@ -238,11 +254,12 @@ def sync_workflow_runs(db: Session, repo: Repository, client: httpx.Client) -> i
 def sync_repository(db: Session, full_name: str, client: httpx.Client) -> SyncJob:
     """Sync one repository, recording the outcome whether it succeeds or not."""
     repo = get_or_create_repository(db, full_name)
+    started_at_utc = utc_now()
     job = SyncJob(
         repository_id=repo.id,
         provider="github",
         status=SyncStatus.RUNNING,
-        started_at=utc_now(),
+        started_at=started_at_utc,
     )
     db.add(job)
     db.commit()
@@ -267,6 +284,10 @@ def sync_repository(db: Session, full_name: str, client: httpx.Client) -> SyncJo
             prometheus.sync_runtime_observations(db, repo)
         if pagerduty.is_configured():
             pagerduty.sync_incidents(db, repo)
+
+        # Advanced only on full success. After a PARTIAL sync the cursor must
+        # stay put, or the records the failure skipped would never be fetched.
+        repo.last_synced_at = started_at_utc
 
         job.status = SyncStatus.SUCCESS
         logger.info(

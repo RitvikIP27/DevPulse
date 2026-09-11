@@ -1028,3 +1028,74 @@ Nine behaviours against the running stack: anonymous 401, public status,
 bootstrap registration, authenticated 200, registration closing with 403, a
 single message on bad credentials, successful login, `/health` staying public
 for liveness probes, and a forged token rejected.
+
+---
+
+# ADR-028 — Webhooks Are a Signal; the REST API Stays the Source of Truth
+
+**Status:** Accepted
+**Date:** 2026-09-11
+**Stage:** 22
+
+## Context
+
+Until now ingestion refetched the whole window on every sync, capped at ten
+pages. That is affordable at three pages and not at a hundred, and it makes
+frequent syncing wasteful — DevPulse re-reads thousands of unchanged records to
+discover a handful of new ones.
+
+## Decision
+
+**Incremental sync.** Each repository carries `last_synced_at`. Pull requests
+come back newest-updated first, so once a record older than the cursor appears,
+everything after it is older still and fetching stops.
+
+The cursor advances **only on a fully successful sync**. After a PARTIAL sync it
+stays where it was — otherwise the records the failure skipped would never be
+fetched, and the gap would be permanent and invisible.
+
+**Webhooks are a signal, not a payload.** A delivery does not write domain data.
+It rewinds the repository's cursor so the next sync re-reads that window, and
+the REST API remains authoritative. A webhook payload can be partial, can arrive
+out of order, and can be replayed; the API is complete and consistent. Treating
+the payload as truth would make the data model depend on delivery order.
+
+Webhooks also do not replace backfill. A webhook only reports events that happen
+*after* it is configured, so historical synchronisation is still the only way to
+learn about the past. The product needs both.
+
+## Security
+
+The receiver is a public URL — anyone can POST to it. Without verification,
+anyone could invent deployments and pull requests, and **every metric in DevPulse
+would be forgeable**.
+
+- HMAC-SHA256 over the **raw body**, read before parsing. Re-serialising parsed
+  JSON would not reproduce the bytes GitHub signed.
+- Compared with `hmac.compare_digest`, which takes the same time whether the
+  first or last byte differs. A plain `==` returns early on mismatch, and that
+  timing difference is enough to recover a signature byte by byte.
+- With no secret configured the endpoint returns **503 rather than accepting**
+  unverified payloads.
+- A delivery naming an untracked repository is **ignored, not auto-created** —
+  otherwise anyone holding the secret could add repositories.
+- `delivery_id` is unique, so GitHub's retries are recognised rather than
+  double-counted.
+
+## Two routers, deliberately
+
+The receiver is public because GitHub cannot present a bearer token; its
+signature *is* its authentication. The operator-facing event listing is mounted
+with the protected group. Splitting them keeps that exception explicit instead
+of leaving a public hole in a router someone later assumes is protected.
+
+## Responding before processing
+
+202, not 200. GitHub times out quickly and retries on timeout, so doing the work
+before responding would turn one slow sync into duplicate deliveries.
+
+## Verified live
+
+Valid signature accepted and processed; a replayed delivery id recognised as a
+duplicate; a forged signature rejected with 401; and a body altered after signing
+rejected with 401.

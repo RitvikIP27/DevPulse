@@ -292,37 +292,29 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   23 — Authentication and security hardening
+Stage:   22 — Webhooks and incremental sync
 Status:  COMPLETE
 Date:    2026-09-11
-Branch:  feat/stage-23-auth-hardening
+Branch:  feat/stage-22-webhooks-incremental-sync
 
 Implementation:
-  + migration 0007: users (bcrypt password_hash, is_active)
-  + core/security.py — bcrypt hashing + JWT issue/verify
-  + core/dependencies.py — current_user, fails closed
-  + routes_auth.py — /status (public), /register, /login, /me
-  + ALL data routers included with dependencies=[Depends(current_user)]
-  + frontend: AuthContext, Login page, token in localStorage, sign-out
-  + CORS origins now configurable (was hard-coded "*")
+  + migration 0008: webhook_events + repositories.last_synced_at
+  + incremental PR sync: stops once records predate the cursor
+  + cursor advances ONLY on full success (a PARTIAL sync must not skip records)
+  + core/webhook_security.py — HMAC-SHA256 over the RAW body, compare_digest
+  + services/webhooks.py — record first, process after; dedupe by delivery_id
+  + POST /api/webhooks/github (PUBLIC — signature is the auth)
+    GET  /api/webhooks/events (PROTECTED — operator listing)
 
-  ADR-027: AUTH_ENABLED opt-in (default off for local use); router-level
-  enforcement so a NEW ROUTE IS PROTECTED BY DEFAULT; identical message for
-  unknown-email vs wrong-password (prevents enumeration); >72-byte passwords
-  REJECTED not truncated; JWT carries only sub/exp/iat.
+  ADR-028: a webhook is a SIGNAL, not a payload. It rewinds the cursor; the REST
+  API stays the source of truth because payloads can be partial/out-of-order.
+  Webhooks do NOT replace backfill (they only report events after setup).
 
-  Removed pydantic EmailStr: it rejects admin@devpulse.local (.local is on a
-  hard-coded special-use list). Syntax checked directly; one less dependency.
+VERIFIED LIVE: valid sig accepted+processed / replay = duplicate / forged sig 401
+  / body tampered after signing 401.
 
-VERIFIED LIVE (9 checks): anon 401 / status public / bootstrap register /
-  authed 200 / register closes 403 / one message on bad creds / login 200 /
-  /health public / forged token 401.
-
-Tests:   backend 201 passed; frontend 29 passed
-PR:      #15
-
-NOTE: backend/.env now has AUTH_ENABLED=true and an owner account
-      ritvik@devpulse.local. Set AUTH_ENABLED=false to bypass login locally.
+Tests:   backend 218 passed; frontend 29 passed
+PR:      #16
 ```
 
 ---
