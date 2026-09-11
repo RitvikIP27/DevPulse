@@ -53,6 +53,8 @@ def isolated_settings(monkeypatch):
     monkeypatch.setattr(settings, "pagerduty_token", "", raising=False)
     monkeypatch.setattr(settings, "pagerduty_service_ids", "", raising=False)
     monkeypatch.setattr(settings, "github_token", "test-token", raising=False)
+    monkeypatch.setattr(settings, "auth_enabled", False, raising=False)
+    monkeypatch.setattr(settings, "secret_key", "test-secret-key", raising=False)
 
 
 @pytest.fixture

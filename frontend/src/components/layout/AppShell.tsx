@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { useFilters } from "../../state/FilterContext";
+import { useAuth } from "../../state/AuthContext";
 import "./layout.css";
 
 const WINDOW_OPTIONS = [7, 30, 90];
@@ -9,6 +10,7 @@ const WINDOW_OPTIONS = [7, 30, 90];
 export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { windowDays, setWindowDays } = useFilters();
+  const { status, signOut } = useAuth();
 
   return (
     <div className="app-shell">
@@ -39,6 +41,9 @@ export default function AppShell() {
                 <option key={days} value={days}>Last {days} days</option>
               ))}
             </select>
+            {status?.auth_required && (
+              <button className="button" onClick={signOut}>Sign out</button>
+            )}
           </div>
         </div>
 
