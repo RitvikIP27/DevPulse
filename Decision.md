@@ -858,3 +858,55 @@ optional feature must never be able to break the deterministic core.
 today; tests drive a fake. No test calls a real model: that would be slow, cost
 money, and make the suite non-deterministic — and what is under test is
 DevPulse's handling of model output, not the model.
+
+---
+
+# ADR-025 — Anomalies Are Persisted, Conservative, and One-Directional
+
+**Status:** Accepted
+**Date:** 2026-09-11
+**Stage:** 10
+
+## Context
+
+Bottleneck scoring answers "where is delivery time going?". It does not answer
+"what changed recently?" — a stage can be the largest cost without anything
+having moved.
+
+## Decision
+
+A separate anomaly engine compares a short recent window against the three
+periods preceding it, using the **same** `services/baselines.py` primitives the
+bottleneck engine uses. One definition of median, baseline and regression for
+the whole product, so the same number can never disagree between two pages.
+
+Anomalies are **persisted**, not derived on read. A derived-only anomaly could
+never answer "when did this start?", cannot be acknowledged, and vanishes the
+moment the metric recovers — losing exactly the history that makes it useful.
+
+## Conservatism is the design
+
+A monitoring surface that cries wolf gets ignored, and an ignored surface is
+worse than none: it costs attention and returns nothing. So:
+
+- A change below 25% is normal variation, matching the bottleneck engine's
+  threshold so the two agree.
+- Fewer than 5 baseline samples means nothing is claimed, with the reason stated.
+- **Improvements are never anomalies.** CI getting three times faster is good
+  news; reporting it would train people to ignore the page.
+- Severity is banded on magnitude: HIGH means roughly a tripling or worse, which
+  is hard to dismiss as noise.
+
+## Idempotence
+
+Detection runs on every page load, so the uniqueness key is
+`(repository, metric, window_start)` with `window_start` truncated to the hour.
+An untruncated timestamp made every run a distinct window and inserted a
+duplicate instead of refreshing — found by a test asserting that running
+detection twice leaves one row.
+
+## Verified
+
+On the audited repository the engine reports CI duration moving from 3.25m to
+11.5m (+253.8%, HIGH) — the same figure the bottleneck engine independently
+reports, which is the intended consequence of sharing one statistics module.

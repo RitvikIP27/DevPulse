@@ -244,6 +244,47 @@ class RcaAnalysis(Base):
     repository = relationship("Repository")
 
 
+class Anomaly(Base):
+    """A detected deviation from a historical baseline.
+
+    Persisted rather than recomputed on every request so that an anomaly has a
+    life cycle: it was first seen at a point in time, it can be acknowledged,
+    and the record survives even after the metric returns to normal. A purely
+    derived anomaly could never answer "when did this start?".
+    """
+
+    __tablename__ = "anomalies"
+    __table_args__ = (
+        UniqueConstraint(
+            "repository_id", "metric", "window_start", name="uq_anomaly_window"
+        ),
+        Index("ix_anomalies_detected_at", "detected_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+
+    metric = Column(String, nullable=False)       # e.g. "ci_duration_minutes"
+    stage = Column(String, nullable=True)         # pipeline stage, when applicable
+    direction = Column(String, nullable=False)    # INCREASE / DECREASE
+    severity = Column(String, nullable=False)     # HIGH / MEDIUM / LOW
+
+    current_value = Column(Float, nullable=False)
+    baseline_value = Column(Float, nullable=False)
+    change_pct = Column(Float, nullable=False)
+    sample_count = Column(Integer, nullable=False)
+    baseline_sample_count = Column(Integer, nullable=False)
+
+    window_start = Column(DateTime, nullable=False)
+    window_end = Column(DateTime, nullable=False)
+    detected_at = Column(DateTime, nullable=False)
+
+    evidence_json = Column(Text, nullable=False)
+    acknowledged_at = Column(DateTime, nullable=True)
+
+    repository = relationship("Repository")
+
+
 class SyncJob(Base):
     """The outcome of one ingestion run.
 

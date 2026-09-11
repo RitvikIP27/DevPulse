@@ -441,3 +441,42 @@ export async function requestRca(deploymentId: number, force = false): Promise<R
   }
   return response.json() as Promise<RcaResponse>;
 }
+
+/* -------------------------------- Anomalies ------------------------------ */
+
+export interface Anomaly {
+  id: number;
+  repository_full_name: string;
+  metric: string;
+  stage: string | null;
+  direction: "INCREASE" | "DECREASE";
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  current_value: number;
+  baseline_value: number;
+  change_pct: number;
+  sample_count: number;
+  baseline_sample_count: number;
+  window_start: string;
+  window_end: string;
+  detected_at: string;
+  acknowledged_at: string | null;
+  evidence: string[];
+}
+
+export interface AnomalyListResponse {
+  anomalies: Anomaly[];
+  window_days: number;
+  detected_now: number;
+  unavailable_reason: string | null;
+}
+
+export function fetchAnomalies(windowDays = 7): Promise<AnomalyListResponse> {
+  return request<AnomalyListResponse>(`/anomalies?window_days=${windowDays}`);
+}
+
+export async function acknowledgeAnomaly(id: number): Promise<void> {
+  const response = await fetch(`${BASE}/anomalies/${id}/acknowledge`, { method: "POST" });
+  if (!response.ok) {
+    throw new ApiError("Could not acknowledge the anomaly.", response.status);
+  }
+}

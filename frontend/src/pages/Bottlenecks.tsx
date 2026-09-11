@@ -6,6 +6,7 @@ import { fetchBottlenecks, type StageAnalysis } from "../api/client";
 import { useAsync } from "../state/useAsync";
 import { useFilters } from "../state/FilterContext";
 import { formatMinutes, UNAVAILABLE } from "../format";
+import AnomalyList from "../components/ui/AnomalyList";
 
 const IMPACT_TONE: Record<StageAnalysis["impact"], BadgeTone> = {
   HIGH: "danger",
@@ -96,9 +97,23 @@ export default function Bottlenecks() {
   return (
     <>
       <PageHeader
-        title="Bottlenecks"
-        description="Where delivery time is actually being spent, and the evidence behind the claim."
+        title="Bottlenecks & Anomalies"
+        description="Where delivery time is being spent, and what has changed against its own history."
       />
+
+      <section className="section">
+        <h2 className="section__title">Recent anomalies</h2>
+        <p className="section__hint">
+          Metrics that moved far enough from their own recent baseline to be worth
+          attention. Improvements are never reported, and nothing is claimed
+          without enough history to compare against.
+        </p>
+        <AnomalyList windowDays={windowDays} />
+      </section>
+
+      <h2 className="section__title" style={{ marginTop: "var(--space-10)" }}>
+        Stage bottlenecks
+      </h2>
 
       {state.status === "loading" && <LoadingState label="Analysing delivery stages" />}
       {state.status === "error" && <ErrorState error={state.error} onRetry={reload} />}

@@ -292,52 +292,32 @@ docs/architecture-audit.md   Stage 0 audit (evidence-backed, 25 findings)
 Update this section after every milestone.
 
 ```text
-Stage:   15 + 16 — Evidence package and AI RCA
+Stage:   10 — Anomaly engine
 Status:  COMPLETE
-Date:    2026-09-10
-Branch:  feat/stage-15-16-evidence-ai-rca
+Date:    2026-09-11
+Branch:  feat/stage-10-anomaly-engine
 
 Summary:
-  AI is finally switched on — as an interpretation layer over deterministic
-  evidence, exactly as ADR-008 required. Analysis page is real. NO placeholders
-  remain in the product.
+  "What changed recently?" — distinct from bottlenecks' "where does time go?".
 
 Implementation:
-  + migration 0005: rca_analyses (evidence_hash, model, prompt_version, result)
-  + services/evidence.py — one EvidencePackage per deployment, assembled from
-    traces + baselines + bottlenecks + runtime + conflicts + coverage
-  + services/ai/ — AIProvider Protocol, AnthropicProvider, versioned prompts
-  + services/ai/rca.py — cache by evidence hash, integrity check, graceful
-    degradation when unconfigured
-  + GET /api/analysis/candidates | /evidence/{id} ; POST /api/analysis/rca/{id}
-  + Analysis page: evidence always, AI section when configured
+  + migration 0006: anomalies table (persisted, acknowledgeable)
+  + services/anomalies.py — reuses services/baselines.py (ONE definition of
+    median/baseline/regression for the whole product)
+  + GET /api/anomalies, POST /api/anomalies/{id}/acknowledge
+  + AnomalyList component rendered on the Bottlenecks page
 
-  ADR-024 guards:
-    structured RcaResult schema separates observed_facts from inferences and
-      REQUIRES alternative_hypotheses + unknowns
-    integrity check flags numbers not present in the evidence
-    caching by evidence hash = reproducibility + cost control
-    anthropic SDK imported LAZILY so a missing optional dep cannot break the API
+  ADR-025 conservatism: <25% = normal variation; <5 baseline samples = no claim;
+  IMPROVEMENTS ARE NEVER ANOMALIES; severity banded on magnitude.
 
-  Model: claude-opus-5, adaptive thinking, structured outputs via messages.parse
+  Idempotence bug found by test: window_start came from utc_now() to the
+  microsecond, so every run inserted a duplicate. Truncated to the hour.
 
-FIXED during this stage:
-  - candidates endpoint built a full evidence package per deployment (ran
-    bottleneck detection per row): 1.6s -> 0.24s
-  - evidence package contradicted itself (RUNTIME NOT_OBSERVED while carrying a
-    runtime conflict). DEPLOYMENT/RUNTIME/INCIDENT stages are now reconciled
-    against real data before assembly.
+VERIFIED live: CI duration 3.25m -> 11.5m (+253.8%, HIGH) — the SAME figure the
+bottleneck engine reports, which is the point of sharing one stats module.
 
-Tests:   backend 136 passed, 0 xfailed; frontend 24 passed
-         AI path tested via a FakeProvider — no test calls a real model.
-
-NOTE: no ANTHROPIC_API_KEY on this machine, so the unconfigured path is what was
-      verified live. Set ANTHROPIC_API_KEY in backend/.env to enable RCA.
-
-PR:      #12
-
-Next:    Stage 10 anomaly engine, Stage 18 health scoring, Stage 22 webhooks,
-         Stage 23 auth. See README roadmap.
+Tests:   backend 148 passed; frontend 24 passed
+PR:      #13
 ```
 
 ---
